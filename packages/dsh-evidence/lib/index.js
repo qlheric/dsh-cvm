@@ -39,10 +39,13 @@ function hasToolCall(event) {
 }
 
 /**
- * 只检测验证债务与"工具刚失败却称完成"，落成 per-session 投影状态。
- * - claimedDone 只在"最终回答（不含工具调用）"时判定，避免中途误触发
- * - lastToolFailed 取 `tool/result` 的 `error` 字段（工具确实报错）
- * - active = claimedDone && ((wroteFile && !verified) || lastToolFailed)
+ * 检测验证债务：改了文件 + 声称完成 + **没有一次成功的验证**。
+ *
+ * 关键语义（教训换来的）：`verified` 指"验证工具**成功**执行"（`tool/result` 无 `error`），
+ * 不是"跑过验证工具"。调试场景里工具报错是**信息**（模型正要看报错），
+ * 若把它当失败会给门禁制造假阳性，反而把好好的修复打断。
+ *
+ * active = claimedDone && wroteFile && !verified
  */
 export function apply(ctx, config = {}) {
   if (config.enabled === false) return;
@@ -58,27 +61,28 @@ export function apply(ctx, config = {}) {
 
   ctx.sessionProjections.register({
     key: config.projectionKey ?? 'cvmEvidence',
-    stateVersion: 2,
-    init: () => ({ wroteFile: false, verified: false, claimedDone: false, lastToolFailed: false, active: false }),
+    stateVersion: 3,
+    init: () => ({ lastTool: null, wroteFile: false, verified: false, claimedDone: false, active: false }),
     apply: (state, event) => {
       try {
         let next = state;
         if (event?.type === 'tool/call') {
-          const tool = event.data?.name;
-          const wroteFile = state.wroteFile || writeTools.has(tool);
-          const verified = state.verified || verifyTools.has(tool);
-          if (wroteFile !== state.wroteFile || verified !== state.verified) {
-            next = { ...state, wroteFile, verified };
+          const tool = event.data?.name ?? null;
+          const wroteFile = state.wroteFile || (tool !== null && writeTools.has(tool));
+          if (tool !== state.lastTool || wroteFile !== state.wroteFile) {
+            next = { ...state, lastTool: tool, wroteFile };
           }
         } else if (event?.type === 'tool/result') {
-          const failed = Boolean(event.data?.error);
-          if (failed !== state.lastToolFailed) next = { ...state, lastToolFailed: failed };
+          // verified 只在"验证工具成功执行（无 error）"时置真
+          if (!state.verified && state.lastTool && verifyTools.has(state.lastTool) && !event.data?.error) {
+            next = { ...state, verified: true };
+          }
         } else if (event?.type === 'assistant/message') {
           if (!state.claimedDone && !hasToolCall(event) && donePattern.test(extractText(event))) {
             next = { ...state, claimedDone: true };
           }
         }
-        const active = next.claimedDone && ((next.wroteFile && !next.verified) || next.lastToolFailed);
+        const active = next.claimedDone && next.wroteFile && !next.verified;
         if (active === next.active) return next;
         return { ...next, active };
       } catch (error) {

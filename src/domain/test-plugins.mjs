@@ -30,12 +30,21 @@ t('声称完成+改了文件+没验证 → active', () => {
   ctx.sessionProjections.feed(A, MSG('修好了，完成了'));
   assertTrue(evid(ctx).active === true);
 });
-t('改了文件且跑了验证 → 不 active', () => {
+t('改了文件且验证成功 → 不 active', () => {
   const ctx = mockCtx(); evidenceApply(ctx, {});
   ctx.sessionProjections.feed(A, TOOL('edit'));
   ctx.sessionProjections.feed(A, TOOL('bash'));
+  ctx.sessionProjections.feed(A, { type: 'tool/result', data: {} });   // 验证成功
   ctx.sessionProjections.feed(A, MSG('完成了'));
   assertTrue(evid(ctx).active === false);
+});
+t('验证工具跑了但报错 → 视为未验证（active）', () => {
+  const ctx = mockCtx(); evidenceApply(ctx, {});
+  ctx.sessionProjections.feed(A, TOOL('edit'));
+  ctx.sessionProjections.feed(A, TOOL('pwsh'));
+  ctx.sessionProjections.feed(A, { type: 'tool/result', data: { error: { name: 'E', code: 'ERR' } } }); // 调试报错=没验证成功
+  ctx.sessionProjections.feed(A, MSG('修好了'));
+  assertTrue(evid(ctx).active === true, '验证失败不该算已验证');
 });
 t('中间步骤（含 tool-call）的"完成"不算声称完成', () => {
   const ctx = mockCtx(); evidenceApply(ctx, {});
@@ -62,20 +71,11 @@ t('donePattern 可配置', () => {
   ctx.sessionProjections.feed(A, MSG('收工'));
   assertTrue(evid(ctx).active === true);
 });
-t('Premature Victory：工具报错却称完成 → active', () => {
+t('验证成功前声称完成 → active（Premature Victory）', () => {
   const ctx = mockCtx(); evidenceApply(ctx, {});
-  ctx.sessionProjections.feed(A, TOOL('bash'));
-  ctx.sessionProjections.feed(A, { type: 'tool/result', data: { error: { name: 'ToolTimeoutError', code: 'TOOL_TIMEOUT' } } });
+  ctx.sessionProjections.feed(A, TOOL('edit'));
   ctx.sessionProjections.feed(A, MSG('搞定了'));
-  assertTrue(evid(ctx).active === true, '工具失败 + 声称完成应触发');
-});
-t('工具失败后重试成功 → 不再 active', () => {
-  const ctx = mockCtx(); evidenceApply(ctx, {});
-  ctx.sessionProjections.feed(A, { type: 'tool/result', data: { error: { name: 'X', code: 'Y' } } });
-  ctx.sessionProjections.feed(A, MSG('搞定了'));
-  assertTrue(evid(ctx).lastToolFailed === true);
-  ctx.sessionProjections.feed(A, { type: 'tool/result', data: {} }); // 重试成功
-  assertTrue(evid(ctx).active === false, '重试成功后应解除');
+  assertTrue(evid(ctx).active === true, '没成功验证过就称完成应触发');
 });
 t('只有工具失败、没声称完成 → 不 active', () => {
   const ctx = mockCtx(); evidenceApply(ctx, {});
