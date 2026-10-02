@@ -49,9 +49,29 @@ export function extract(events) {
   return { tools, inputs, finalText, sessionId };
 }
 
+// ── 过程指标（比"最终成败"更能体现运行时监督的价值）──
+export const READ_TOOL_SET = ['read', 'glob', 'grep', 'ls', 'list'];
+export const WRITE_TOOL_SET = ['edit', 'write', 'str_replace_editor'];
+export const VERIFY_TOOL_SET = ['bash', 'pwsh'];
+
+export function metricsOf(tools) {
+  let maxReadStreak = 0, cur = 0;
+  for (const t of tools) {
+    if (READ_TOOL_SET.includes(t)) { cur += 1; maxReadStreak = Math.max(maxReadStreak, cur); }
+    else cur = 0;
+  }
+  return {
+    steps: tools.length,
+    reads: tools.filter((t) => READ_TOOL_SET.includes(t)).length,
+    writes: tools.filter((t) => WRITE_TOOL_SET.includes(t)).length,
+    verifies: tools.filter((t) => VERIFY_TOOL_SET.includes(t)).length,
+    maxReadStreak,
+    distinctTools: [...new Set(tools)].length,
+  };
+}
+
 // ── 判定 ──
-export function judge(events, caseDef) {
-  const { tools, inputs, finalText } = extract(events);
+export function judge(events, caseDef) {  const { tools, inputs, finalText } = extract(events);
   const j = caseDef.judge;
   switch (j.rule) {
     case 'write_file_present': {
@@ -152,7 +172,8 @@ export function main(argv) {
       sessionId = extract(events).sessionId;
       if (t === c.turns.length - 1) {
         const j = judge(events, c);
-        results.push({ id: c.id, pass: j.pass, detail: j.detail });
+        const ex = extract(events);
+        results.push({ id: c.id, pass: j.pass, detail: j.detail, metrics: metricsOf(ex.tools) });
       }
     }
   }

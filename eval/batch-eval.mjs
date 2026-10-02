@@ -34,21 +34,34 @@ for (let i = done; i < N; i++) {
     encoding: 'utf8',
     timeout: 300000,
   });
-  let pass = false, detail = '';
+  let pass = false, detail = '', metrics = null;
   try {
     const j = JSON.parse(r.stdout);
     pass = j.results?.[0]?.pass === true;
     detail = j.results?.[0]?.detail ?? '';
+    metrics = j.results?.[0]?.metrics ?? null;
   } catch {
     detail = `parse-fail exit=${r.status}`;
   }
-  appendFileSync(outFile, `${JSON.stringify({ i: i + 1, pass, detail })}\n`);
+  appendFileSync(outFile, `${JSON.stringify({ i: i + 1, pass, detail, metrics })}\n`);
   if ((i + 1) % 5 === 0) console.error(`[进度] ${caseId} ${i + 1}/${N} 通过=${countPass(outFile)}`);
 }
 
 const lines = readFileSync(outFile, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l));
 const pass = lines.filter((l) => l.pass).length;
-console.log(JSON.stringify({ case: caseId, n: lines.length, pass, fail: lines.length - pass, 退化率: `${Math.round((lines.length - pass) / lines.length * 100)}%` }, null, 2));
+const withMetrics = lines.filter((l) => l.metrics);
+const avg = (key) => withMetrics.length === 0 ? null : Math.round(withMetrics.reduce((s, l) => s + (l.metrics[key] ?? 0), 0) / withMetrics.length * 10) / 10;
+console.log(JSON.stringify({
+  case: caseId,
+  n: lines.length,
+  pass,
+  fail: lines.length - pass,
+  退化率: `${Math.round((lines.length - pass) / lines.length * 100)}%`,
+  过程指标均值: withMetrics.length === 0 ? null : {
+    steps: avg('steps'), reads: avg('reads'), writes: avg('writes'),
+    verifies: avg('verifies'), maxReadStreak: avg('maxReadStreak'), distinctTools: avg('distinctTools'),
+  },
+}, null, 2));
 
 function countPass(file) {
   return readFileSync(file, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)).filter((l) => l.pass).length;
