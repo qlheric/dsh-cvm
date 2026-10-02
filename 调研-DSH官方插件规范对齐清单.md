@@ -124,17 +124,19 @@ tools/pre-execute（允许/拒绝/询问，可异步）
 
 ## 五、我们的对齐动作清单（按优先级）
 
-| # | 动作 | 依据 | 方向 |
-|---|---|---|---|
-| 1 | 四插件状态机改 `ctx.sessionProjections` unit | practices §Performance | 优化运行 |
-| 2 | 阈值/关键词移入 `Config`（schemastery） | practices §Stability + #365 | 完善功能 |
-| 3 | 不加新 session event type；干预用 `agent.inject()` 或 section | practices §Stability 🔴 | 提高质量 |
-| 4 | `convergence` 改用 `agent/turn-stopping`（官方指定熔断落点） | agent-loop README | 完善功能 |
-| 5 | `evidence` 加 `tool/result.error` 检测（工具报错却称完成） | 事件表 + #365 | 完善功能 |
-| 6 | 补 fail-open（detector 异常不阻塞） | #365 设计原则 | 提高质量 |
-| 7 | 补 `locale/en.json` + `locale/zh.json` + `icon` | host-plugin.md | 提高质量 |
-| 8 | 补 `.github/workflows/ci.yml` + keywords + scripts | dsh-guardian 对标 | 提高质量 |
-| 9 | 用 `plugin_manager install_bundle` 安装（不手写 profile） | SKILL.md | 提高质量 |
+| # | 动作 | 依据 | 方向 | 状态 |
+|---|---|---|---|---|
+| 1 | 四插件状态机改 `ctx.sessionProjections` unit | practices §Performance | 优化运行 | ✅ 已完成 |
+| 2 | 阈值/关键词移入 `Config`（schemastery） | practices §Stability + #365 | 完善功能 | ✅ 已完成 |
+| 3 | 不加新 session event type；干预用 `agent.inject()` 或 section | practices §Stability 🔴 | 提高质量 | ✅ 已遵守（删了 cvm/signal，改读投影） |
+| 4 | `convergence` 改用 `agent/turn-stopping`（官方指定熔断落点） | agent-loop README | 完善功能 | ✅ 已实现（intervention 门禁 steer） |
+| 5 | `evidence` 加 `tool/result.error` 检测（工具报错却称完成） | 事件表 + #365 | 完善功能 | ⏳ 待做 |
+| 6 | 补 fail-open（detector 异常不阻塞） | #365 设计原则 | 提高质量 | ✅ 已完成 |
+| 7 | 补 `locale/en.json` + `locale/zh.json` + `icon` | host-plugin.md | 提高质量 | ⏳ 待做 |
+| 8 | 补 `.github/workflows/ci.yml` + keywords + scripts | dsh-guardian 对标 | 提高质量 | ⏳ 待做 |
+| 9 | 用 `plugin_manager install_bundle` 安装（不手写 profile） | SKILL.md | 提高质量 | ⏳ 待做 |
+
+**已完成 5/9**。第 4 项的落地方式：`intervention` 在 `agent/turn-stopping` 里读投影，有信号就 `agent.steer(createUserMessage(...))` 一次（每会话至多一次，防无限续轮）。
 
 ## 六、还有两个官方 skill 可挖
 

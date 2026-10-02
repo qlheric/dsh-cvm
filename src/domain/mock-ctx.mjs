@@ -5,6 +5,7 @@ export function mockCtx() {
   const variables = {};
   const sections = [];
   const warnings = [];
+  const handlers = {};          // eventName -> handler（模拟 ctx.on）
 
   const sessionProjections = {
     register(def) { units.set(def.key, def); },
@@ -39,8 +40,9 @@ export function mockCtx() {
       variable(name, provider) { variables[name] = provider; },
       section(opts) { sections.push(opts); },
     },
+    on(event, handler) { handlers[event] = handler; },
     logger: { warn(...args) { warnings.push(args); } },
-    variables, sections, warnings,
+    variables, sections, warnings, handlers,
   };
 }
 

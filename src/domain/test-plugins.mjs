@@ -118,4 +118,47 @@ t('拿不到 session → 空提示（fail-open）', () => {
   assertTrue(ctx.variables['cvm_intervention_hint']({}) === '');
 });
 
+console.log('== intervention 终局门禁（agent/turn-stopping steer）==');
+function steerableAgent(sid, steered) {
+  return { session: { id: sid }, steer: (msg) => steered.push(msg) };
+}
+t('有信号时 steer 一次（强制再走一步）', () => {
+  const ctx = mockCtx();
+  ctx.sessionProjections.register({ key: 'cv', init: () => ({ active: true }), apply: (s) => s });
+  ctx.sessionProjections.register({ key: 'ev', init: () => ({ active: false }), apply: (s) => s });
+  interventionApply(ctx, { convergenceKey: 'cv', evidenceKey: 'ev' });
+  const steered = [];
+  const h = ctx.handlers['agent/turn-stopping'];
+  assertTrue(Boolean(h), '应注册 agent/turn-stopping');
+  h({ agent: steerableAgent('a', steered) });
+  assertTrue(steered.length === 1, '应 steer 一次');
+  assertTrue(steered[0]?.content?.[0]?.text?.includes('打转'), 'steer 文本应是打转提示');
+});
+t('无信号时不 steer', () => {
+  const ctx = mockCtx();
+  ctx.sessionProjections.register({ key: 'cv', init: () => ({ active: false }), apply: (s) => s });
+  ctx.sessionProjections.register({ key: 'ev', init: () => ({ active: false }), apply: (s) => s });
+  interventionApply(ctx, { convergenceKey: 'cv', evidenceKey: 'ev' });
+  const steered = [];
+  ctx.handlers['agent/turn-stopping']({ agent: steerableAgent('b', steered) });
+  assertTrue(steered.length === 0);
+});
+t('同一会话至多 steer 一次（防无限续轮）', () => {
+  const ctx = mockCtx();
+  ctx.sessionProjections.register({ key: 'cv', init: () => ({ active: true }), apply: (s) => s });
+  ctx.sessionProjections.register({ key: 'ev', init: () => ({ active: false }), apply: (s) => s });
+  interventionApply(ctx, { convergenceKey: 'cv', evidenceKey: 'ev' });
+  const steered = [];
+  const agent = steerableAgent('c', steered);
+  ctx.handlers['agent/turn-stopping']({ agent });
+  ctx.handlers['agent/turn-stopping']({ agent });
+  ctx.handlers['agent/turn-stopping']({ agent });
+  assertTrue(steered.length === 1, '重复调用只应 steer 一次');
+});
+t('steerAtTurnStop:false 时不注册门禁', () => {
+  const ctx = mockCtx();
+  interventionApply(ctx, { steerAtTurnStop: false });
+  assertTrue(!ctx.handlers['agent/turn-stopping']);
+});
+
 console.log(`\n通过 ${passed} 项${process.exitCode ? '（有失败）' : ''}`);
