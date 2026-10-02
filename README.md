@@ -1,32 +1,31 @@
 # dsh-cvm · DSH 认知运行时插件集
 
-> 给 DeepSeek Harness（DSH）加一层**认知运行时（Cognitive Runtime）**——用确定性监督对抗 LLM 的"认知锚点坍缩"。
-> 四个正交的 Cordis 插件，零侵入、可组合、可演进。模型提供认知，这里提供执行语义。
+> 给 DeepSeek Harness（DSH）加一层**认知运行时**——用确定性监督对抗 LLM 的"认知锚点坍缩"。
+> 四个正交的 Cordis 插件，零侵入、可组合、可演进。
 
-## 一句话
+## 定位（先说清楚，别误解）
 
-LLM 在真实工程里反复做出**低于它能力上限**的行为（被局部信号吸走、原地打转、空口说完成），根因不是能力不够，是运行时缺一层"确定性监督"。这四个插件把**任务契约 / 收敛判定 / 验证债务 / 分档干预**从模型上下文里外部化，用确定性规则管理概率认知。
+**这不是"提升模型能力"的插件，是"给强模型加一层保险"的插件。**
+
+模型越强，自己就越会验证、越会换方法——所以想"补能力"的空间天然很小。真正还在的缺口是：**强模型偶尔会被局部信号锚定，做出一段低于它自身水平的轨迹**（盯着"文件已存在"反复读、声称完成却没验证）。dsh-cvm 只针对这个缺口，代价是**可能误伤**（见下文"已知代价"）。
+
+**适用**：长任务、易锚定场景（改了文件要它真跑起来）、需要在无人看管时防打转。
+**不适用**：一句话问答；或你觉得模型本来就做得很好、不想让它被任何规则打断。
 
 ## 背景：认知锚点坍缩
 
-对齐后的 Transformer Agent 会表现出一类高度趋同的退化（有同行评审背书，见 `认知运行时改造-知识底座.md`）：
-
-- 用户一质疑就投降；局部高显著信息压过全局目标；
-- 长上下文里被早期结论支配；反复调用同类工具却不推进；
-- 明明"知道"某条规则，却跨轮次不稳定。
-
-**缺的不是更好的 prompt，是模型之外的一个认知运行时。**
+对齐后的 Transformer Agent 会表现出一类高度趋同的退化（有同行评审背书，见 `认知运行时改造-知识底座.md`）：用户一质疑就投降；局部高显著信息压过全局目标；长上下文里被早期结论支配；反复调用同类工具却不推进。
 
 ## 四个插件（正交）
 
-| 插件 | 职责 | 订阅的接缝 | 对抗 |
+| 插件 | 职责 | 状态/接缝 | 对抗 |
 |---|---|---|---|
-| `dsh-contract` | 把「全局目标」外部化 + 投影进 system prompt | `session/event`（user/message） | 语义/策略锚点 |
-| `dsh-convergence` | 检测「连续只读打转」，按 session 独立计数 | `session/event`（tool/call） | 收敛坍缩（doom loop） |
-| `dsh-evidence` | 检测「声称完成但改了文件没验证」（终局门禁） | `session/event`（tool/call、assistant/message） | 验证债务 |
-| `dsh-intervention` | 唯一注入点：收前三个信号，按优先级注入动态提示 | `cvm/signal`（自定义事件） | 把检测变成行动 |
+| `dsh-contract` | 把首条用户消息落成**任务契约**，投影进 system prompt | `sessionProjections`（`cvmContract`）+ `systemPrompt.section` | 语义锚点 |
+| `dsh-convergence` | 检测「连续只读打转」（跨工具、按 session 独立计数） | `sessionProjections`（`cvmConvergence`） | 收敛坍缩（doom loop） |
+| `dsh-evidence` | 检测「声称完成 + 改了文件 + 没有一次成功验证」 | `sessionProjections`（`cvmEvidence`） | 验证债务 |
+| `dsh-intervention` | **唯一注入点**：读前三个的投影状态 → 注入提示 / 收尾时强制再走一步 | `systemPrompt.section` + `agent/turn-stopping`（`agent.steer`） | 把检测变成行动 |
 
-**正交**：convergence/evidence 只检测、发 `cvm/signal`；intervention 只收信号、注入。四者互不直接 import/调用。
+**正交**：contract/convergence/evidence 只**写投影状态**，intervention 只**读状态并行动**——互不直接 import/调用。状态全走官方 `ctx.sessionProjections`（纯函数 apply、可 checkpoint、多会话天然隔离）。
 
 ## 安装（零侵入，不碰 DSH 核心）
 
@@ -39,36 +38,65 @@ LLM 在真实工程里反复做出**低于它能力上限**的行为（被局部
       "bundles": [
         "@deepseek-ai/dsh-base",
         "@deepseek-ai/dsh-headless",
-        "@deepseek-ai/dsh-contract",
-        "@deepseek-ai/dsh-convergence",
-        "@deepseek-ai/dsh-evidence",
-        "@deepseek-ai/dsh-intervention"
+        "@qlheric/dsh-contract",
+        "@qlheric/dsh-convergence",
+        "@qlheric/dsh-evidence",
+        "@qlheric/dsh-intervention"
       ]
     }
   }
 }
 ```
 
-插件放 profile 自己的 `node_modules`（这是 DSH 解析 profile bundle 的位置）。不重构 `dsh-agent-loop`，只订阅它已经暴露的 Decision 接口（`agent/pre-step`、`agent/turn-stopping`、`session/event`）。
+或直接：`dsh plugin --profile <你的profile> add github:qlheric/dsh-cvm`（装 `packages/` 下的四个包）。
 
-## 验证（诚实版）
+不改 `dsh-agent-loop`，只用官方暴露的接缝：`sessionProjections`、`systemPrompt.section/variable`、`agent/turn-stopping`。
 
-**核心结论**：`convergence` 动态干预让 C1 场景（模型被"文件已存在"锚定，只读不修或打转）从基线 **40% 退化降到 10–30%**，有 `grep×6 → edit×6` 的"打转→检测→干预→换方法"完整证据。
+## 验证（诚实版，数据都在）
 
-**边界（要诚实）**：
-- 样本量 5–10 次/组合，10–30% 是区间不是精确值（headless 评测慢 + API 限流）。
-- 主动异议、验证债务两个判据未充分验证——不是因为 CVM 失效，是 deepseek 这类强模型在简单对抗上基线就不退化。
-- 这是"实验室级"证据，方向对、机制有效，但未到"生产级"稳定。
+**C1 场景**（模型被"文件已存在"锚定，需要真把功能改好）——各 8 次：
 
-复现评测：`eval/` 目录（`drive.mjs` 单次、`parallel-eval.mjs` 并行、`cases.json` 场景、`fixtures/` 场景文件）。
+| 组 | 退化率 |
+|---|---|
+| 基线（无插件） | 25% |
+| 三插件（contract+convergence+intervention） | **12.5%** |
+| 四插件（+evidence v3） | **12.5%** |
+| 四插件（+evidence **v1**） | 37.5% ← 见下方"已知代价" |
+
+**C6 场景**（说完成但没验证）——各 8 次：基线 **87.5%** / 四插件 **100%**（差异仅 1 次，不显著——**因为强模型自己就会验证**）。
+
+**边界**：
+- 样本 8 次/组，是**方向性证据**，不是精确值；厂商 API 抖动 + 单次方差大。
+- 主动异议（C2）在 deepseek 上基线就不退化，**测不出改善空间**。
+- 这是"实验室级"证据（隔离 `DSH_HOME`、headless 评测），未到"生产级"。
+
+## 已知代价（用它之前请读）
+
+`dsh-evidence` v1 曾把 `tool/result.error` 当"工具失败"，结果在调试场景里**把模型正常的"看报错再改"误判成失败**，C1 退化率反而从 12.5% 涨到 **37.5%（比不用插件还差）**。修正后的 v3 改为"验证工具**成功**执行才算验证过"，干扰消除。
+
+**教训**：这类插件的风险不是"没效果"，是**误伤**。所以每个插件都可配置、可单独关闭，`evidence` 更提供了 `enabled: false` 开关。
+
+## 配置
+
+所有阈值/关键词/提示文本都在各插件的 `Config`（schemastery），可在 `cordis.patch.yml` 里覆盖，patch 层跨升级存活。例：
+
+```yaml
+- id: convergence
+  config:
+    threshold: 8          # 连续只读 8 次才算打转
+    readTools: [read, glob, grep]
+- id: intervention
+  config:
+    steerAtTurnStop: false # 关掉"收尾强制再走一步"
+```
 
 ## 目录
 
 ```
 packages/dsh-{contract,convergence,evidence,intervention}/  # 四插件
 eval/                                                       # 评测集 + 驱动脚本 + 场景
-src/domain/                                                 # 核心领域逻辑 + 单测
-*.md                                                        # 知识底座、规划、各阶段文档
+src/domain/                                                 # 单测（41 项）
+*.md                                                        # 知识底座、调研、阶段文档
 ```
 
 ## License
