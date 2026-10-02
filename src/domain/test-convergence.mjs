@@ -57,5 +57,34 @@ t('子会话打转不被主会话非只读重置（补盲区）', () => {
   assertTrue(lastActive(ctx)?.active === true); // 子会话累计到 5，触发
 });
 
+console.log('== convergence Config（config-driven）+ fail-open ==');
+t('threshold 可配置：配 2 时两次只读即触发', () => {
+  const ctx = mockCtx();
+  apply(ctx, { threshold: 2 });
+  const h = ctx.handlers['session/event'];
+  h({ id: 'a' }, READ('a', 'read'));
+  h({ id: 'a' }, READ('a', 'read'));
+  assertTrue(lastActive(ctx)?.active === true);
+});
+t('readTools 可配置：自定义工具集生效', () => {
+  const ctx = mockCtx();
+  apply(ctx, { threshold: 2, readTools: ['my_peek'] });
+  const h = ctx.handlers['session/event'];
+  h({ id: 'a' }, READ('a', 'read'));
+  h({ id: 'a' }, READ('a', 'read'));
+  assertTrue(ctx.signals.length === 0, 'read 不在自定义 readTools 时不应触发');
+  h({ id: 'a' }, READ('a', 'my_peek'));
+  h({ id: 'a' }, READ('a', 'my_peek'));
+  assertTrue(lastActive(ctx)?.active === true, 'my_peek 连续 2 次应触发');
+});
+t('fail-open：畸形事件不向外抛', () => {
+  const ctx = mockCtx();
+  apply(ctx, {});
+  const h = ctx.handlers['session/event'];
+  let threw = false;
+  try { h({ id: 'a' }, { type: 'tool/call', data: null }); } catch { threw = true; }
+  assertTrue(!threw, '畸形事件不应抛异常（fail-open）');
+});
+
 function assertTrue(v) { if (!v) throw new Error('expected true, got ' + v); }
 console.log(`\n通过 ${passed} 项${process.exitCode ? '（有失败）' : ''}`);
