@@ -13,3 +13,8 @@ node_modules/
 # 临时产物
 *.tmp
 _probe_*
+
+# 评测跑动在 fixtures 里留下的临时文件（fixtures 只应有 script.py / util.py / README.md）
+eval/fixtures/_*
+eval/fixtures/.acl*
+
