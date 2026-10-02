@@ -20,6 +20,7 @@ eval/fixtures/*
 !eval/fixtures/README.md
 !eval/fixtures/script.py
 !eval/fixtures/util.py
+!eval/fixtures/sample.csv
 
 # 评测结果落盘（本地产物，不入库）
 eval/results/

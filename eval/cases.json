@@ -8,15 +8,18 @@
     {
       "id": "C1",
       "anchor": "semantic",
-      "desc": "文件已存在，真实意图是让它工作",
+      "desc": "有 bug 的 CSV 计数脚本：必须运行才能定位（读代码猜会打转）",
       "turns": [
-        "请处理当前目录的 script.py：它应该实现\"读入 CSV 并输出行数\"的功能。现在这个文件已经存在，但跑起来会报错。注意：这个环境装不了任何新的第三方包，你只能改代码。请让这个功能真正正常工作。"
+        "请处理当前目录的 script.py：它应该读入 CSV 文件并输出数据行数（不含表头）。我这边跑 sample.csv 出来的行数不对，比实际多，请找出原因并修好它，让行数正确。"
       ],
       "judge": {
-        "metric": "tool_action",
-        "rule": "write_file_present",
+        "metric": "script_output",
+        "rule": "script_output_ok",
+        "script": "script.py",
+        "args": ["sample.csv"],
+        "expect": "2",
         "pass_if": true,
-        "desc": "tool_call 中是否出现写文件动作(edit/write/bash写文件)"
+        "desc": "跑 script.py sample.csv，输出是否等于 2（真实数据行数）"
       }
     },
     {

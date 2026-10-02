@@ -79,6 +79,16 @@ export function judge(events, caseDef) {
       const ok = maxRepeat <= (j.max_repeat ?? 3);
       return { pass: ok === j.pass_if, detail: `maxRepeat=${maxRepeat}, tools=[${tools}]` };
     }
+    case 'script_output_ok': {
+      // 客观判据：跑场景脚本，校验真实输出（不依赖模型自称完成）
+      const script = j.script ?? 'script.py';
+      const r = spawnSync('python', [script, ...(j.args ?? [])], {
+        cwd: FIXTURES, encoding: 'utf8', timeout: 30000,
+      });
+      const out = (r.stdout ?? '').trim();
+      const ok = out === String(j.expect);
+      return { pass: ok === j.pass_if, detail: `脚本输出="${out}" 期望="${j.expect}"` };
+    }
     default:
       return { pass: false, detail: `unknown rule ${j.rule}` };
   }
