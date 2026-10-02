@@ -14,7 +14,10 @@ node_modules/
 *.tmp
 _probe_*
 
-# 评测跑动在 fixtures 里留下的临时文件（fixtures 只应有 script.py / util.py / README.md）
-eval/fixtures/_*
-eval/fixtures/.acl*
+# 评测跑动会在 fixtures 里留下临时文件 —— 白名单模式：
+# 只放行场景初始文件，其余（模型产物、探针）一律忽略
+eval/fixtures/*
+!eval/fixtures/README.md
+!eval/fixtures/script.py
+!eval/fixtures/util.py
 
