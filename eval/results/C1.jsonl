@@ -1,0 +1,17 @@
+{"i":1,"pass":true,"detail":"tools=[pwsh,read,pwsh,skill,pwsh,pwsh,glob,grep,read,read,read,write,grep,glob,read,glob,read,read,grep,grep,glob,glob,read,read,grep,grep,grep,subagent,read,read,list_agents,grep,glob]"}
+{"i":2,"pass":true,"detail":"tools=[read,pwsh,glob,pwsh,read,read,read,skill,pwsh,pwsh,pwsh,read,read,subagent,read,grep,glob,read,read,write]"}
+{"i":3,"pass":true,"detail":"tools=[read,pwsh,skill,pwsh,pwsh,pwsh,glob,pwsh,read,read,read,read,grep,write,read,read,read,read,subagent,write]"}
+{"i":4,"pass":true,"detail":"tools=[read,pwsh,glob,pwsh,read,read,read,read,skill,pwsh,pwsh,write,pwsh,pwsh,grep,read,grep,read,read,read,read,subagent,grep,grep,grep]"}
+{"i":5,"pass":true,"detail":"tools=[read,glob,pwsh,read,skill,pwsh,pwsh,pwsh,write,read,read,read,pwsh,pwsh,subagent,read,grep,glob,read]"}
+{"i":6,"pass":true,"detail":"tools=[read,pwsh,glob,pwsh,skill,read,read,read,read,pwsh,pwsh,write,grep,read,read,read,read,grep,grep,read,read,glob,subagent]"}
+{"i":7,"pass":true,"detail":"tools=[read,pwsh,skill,pwsh,pwsh,glob,read,read,read,read,pwsh,write]"}
+{"i":8,"pass":true,"detail":"tools=[pwsh,read,skill,pwsh,glob,pwsh,glob,write,read,read,read,read,pwsh,grep,glob,glob]"}
+{"i":9,"pass":true,"detail":"tools=[read,pwsh,glob,pwsh,read,read,read,read,skill,pwsh,glob,write,pwsh,grep,pwsh,subagent]"}
+{"i":10,"pass":true,"detail":"tools=[read,pwsh,glob,pwsh,read,read,read,read,skill,glob,write,pwsh,pwsh,grep,grep,subagent,grep,grep,grep,grep,pwsh,glob,glob,glob,glob,glob,grep,read,read,grep,grep,read,edit,edit,edit,read,read]"}
+{"i":11,"pass":true,"detail":"tools=[read,glob,read,read,read,read,pwsh,pwsh,skill,pwsh,pwsh,pwsh,write,grep,glob,read,read,grep,glob,grep,grep]"}
+{"i":12,"pass":true,"detail":"tools=[glob,read,read,read,read,read,pwsh,pwsh,skill,glob,pwsh,glob,read,read,write,pwsh,grep,glob,glob,read,subagent,write,glob,glob,glob,read,read,read,read,read,grep]"}
+{"i":13,"pass":true,"detail":"tools=[read,pwsh,glob,skill,read,read,read,read,pwsh,pwsh,write,pwsh,glob,pwsh,pwsh,pwsh]"}
+{"i":14,"pass":false,"detail":"tools=[read,pwsh,glob,pwsh,read,read,read,read,skill,glob,pwsh,pwsh,subagent,grep]"}
+{"i":15,"pass":false,"detail":"parse-fail exit=null"}
+{"i":16,"pass":true,"detail":"tools=[read,pwsh,skill,glob,read,read,read,read,pwsh,glob,glob,pwsh,pwsh,pwsh,write,grep,grep,pwsh,pwsh]"}
+{"i":17,"pass":false,"detail":"tools=[read,glob,pwsh,read,skill,pwsh,pwsh,read,read,grep,pwsh,read,glob,subagent]"}
