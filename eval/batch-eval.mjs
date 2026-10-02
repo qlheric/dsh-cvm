@@ -1,5 +1,5 @@
 // 批量评测：结果逐条落盘（JSONL），支持断点续跑，中断不丢数据
-// 用法：node batch-eval.mjs <caseId> <总次数N> [--reset]
+// 用法：node batch-eval.mjs <caseId> <总次数N> [--reset] [--label A|B]
 import { spawnSync } from 'node:child_process';
 import { appendFileSync, readFileSync, existsSync, mkdirSync, rmSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -14,10 +14,13 @@ const DSH_BIN = join(ROOT, '.dsh-runtime', 'node_modules', '@deepseek-ai', 'dsh'
 const [caseId, nStr] = process.argv.slice(2);
 const N = parseInt(nStr ?? '20', 10);
 const reset = process.argv.includes('--reset');
-if (!caseId) { console.error('用法: node batch-eval.mjs <caseId> <N> [--reset]'); process.exit(1); }
+const labelIdx = process.argv.indexOf('--label');
+const label = labelIdx >= 0 ? process.argv[labelIdx + 1] : '';
+if (!caseId) { console.error('用法: node batch-eval.mjs <caseId> <N> [--reset] [--label A|B]'); process.exit(1); }
 
 mkdirSync(OUTDIR, { recursive: true });
-const outFile = join(OUTDIR, `${caseId}.jsonl`);
+// 带标签时 A/B 数据并存，互不覆盖
+const outFile = join(OUTDIR, `${caseId}${label ? `-${label}` : ''}.jsonl`);
 if (reset && existsSync(outFile)) rmSync(outFile);
 
 const done = existsSync(outFile)
