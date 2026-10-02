@@ -1,6 +1,7 @@
 import z from "@deepseek-ai/schemastery";
 
 export const name = 'evidence';
+export const inject = ['sessionProjections'];
 
 const DEFAULT_WRITE_TOOLS = ['edit', 'write', 'str_replace_editor'];
 const DEFAULT_VERIFY_TOOLS = ['bash', 'pwsh'];
@@ -15,6 +16,8 @@ export const Config = z.object({
   donePattern: z.string().default(DEFAULT_DONE_PATTERN),
   /** 开关整个终局门禁。 */
   enabled: z.boolean().default(true),
+  /** 投影 key（intervention 按此读取）。 */
+  projectionKey: z.string().default('cvmEvidence'),
 });
 
 function extractText(event) {
@@ -35,7 +38,10 @@ function hasToolCall(event) {
   return false;
 }
 
-// 只检测验证债务，发信号。claimedDone 只在"最终回答（不含工具调用）"时判定，避免中途误触发。
+/**
+ * 只检测验证债务，落成 per-session 投影状态。
+ * claimedDone 只在"最终回答（不含工具调用）"时判定，避免中途误触发。
+ */
 export function apply(ctx, config = {}) {
   if (config.enabled === false) return;
 
@@ -48,35 +54,33 @@ export function apply(ctx, config = {}) {
     donePattern = new RegExp(DEFAULT_DONE_PATTERN, 'i');
   }
 
-  const bySession = new Map(); // sessionId -> { wroteFile, verified, claimedDone }
-  let active = false;
-
-  ctx.on('session/event', (session, event) => {
-    try {
-      const sid = session?.id;
-      if (!sid) return;
-      let state = bySession.get(sid);
-      if (!state) {
-        state = { wroteFile: false, verified: false, claimedDone: false };
-        bySession.set(sid, state);
+  ctx.sessionProjections.register({
+    key: config.projectionKey ?? 'cvmEvidence',
+    stateVersion: 1,
+    init: () => ({ wroteFile: false, verified: false, claimedDone: false, active: false }),
+    apply: (state, event) => {
+      try {
+        let next = state;
+        if (event?.type === 'tool/call') {
+          const tool = event.data?.name;
+          const wroteFile = state.wroteFile || writeTools.has(tool);
+          const verified = state.verified || verifyTools.has(tool);
+          if (wroteFile !== state.wroteFile || verified !== state.verified) {
+            next = { ...state, wroteFile, verified };
+          }
+        } else if (event?.type === 'assistant/message') {
+          if (!state.claimedDone && !hasToolCall(event) && donePattern.test(extractText(event))) {
+            next = { ...state, claimedDone: true };
+          }
+        }
+        const active = next.claimedDone && next.wroteFile && !next.verified;
+        if (active === next.active) return next;
+        return { ...next, active };
+      } catch (error) {
+        // fail-open：投影异常不得影响会话
+        try { ctx.logger?.warn?.('dsh-evidence: projection error (fail-open)', error); } catch { /* ignore */ }
+        return state;
       }
-
-      if (event?.type === 'tool/call') {
-        const tool = event.data?.name;
-        if (writeTools.has(tool)) state.wroteFile = true;
-        if (verifyTools.has(tool)) state.verified = true;
-      } else if (event?.type === 'assistant/message') {
-        if (!hasToolCall(event) && donePattern.test(extractText(event))) state.claimedDone = true;
-      }
-
-      const next = [...bySession.values()].some((s) => s.claimedDone && s.wroteFile && !s.verified);
-      if (next !== active) {
-        active = next;
-        ctx.emit('cvm/signal', { kind: 'evidence', active });
-      }
-    } catch (error) {
-      // fail-open：检测器异常绝不阻塞 agent
-      try { ctx.logger?.warn?.('dsh-evidence: detector error (fail-open)', error); } catch { /* ignore */ }
-    }
+    },
   });
 }

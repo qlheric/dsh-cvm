@@ -1,6 +1,7 @@
 import z from "@deepseek-ai/schemastery";
 
 export const name = 'convergence';
+export const inject = ['sessionProjections'];
 
 const DEFAULT_READ_TOOLS = ['read', 'glob', 'grep', 'ls', 'list'];
 const DEFAULT_THRESHOLD = 5;
@@ -10,35 +11,36 @@ export const Config = z.object({
   readTools: z.array(z.string()).default([...DEFAULT_READ_TOOLS]),
   /** 连续只读多少次判定为打转。 */
   threshold: z.natural().min(1).default(DEFAULT_THRESHOLD),
+  /** 投影 key（intervention 按此读取）。 */
+  projectionKey: z.string().default('cvmConvergence'),
 });
 
-// 只检测打转，发信号。按 session 独立计数（补 subagent 盲区：子会话打转不会被主会话的非只读工具重置）。
+/**
+ * 只检测打转，落成 per-session 投影状态（官方 sessionProjections 机制）。
+ * 纯计算、无副作用、可 checkpoint；多会话天然隔离。
+ */
 export function apply(ctx, config = {}) {
   const readTools = new Set(config.readTools ?? DEFAULT_READ_TOOLS);
   const threshold = config.threshold ?? DEFAULT_THRESHOLD;
-  const streaks = new Map(); // sessionId -> 连续只读计数
-  let active = false;
 
-  ctx.on('session/event', (session, event) => {
-    try {
-      if (event?.type !== 'tool/call') return;
-      const tool = event.data?.name;
-      const sid = session?.id;
-      if (!tool || !sid) return;
-
-      let streak = streaks.get(sid) ?? 0;
-      streak = readTools.has(tool) ? streak + 1 : 0;
-      streaks.set(sid, streak);
-
-      // 任一 session 打转即发信号
-      const next = [...streaks.values()].some((s) => s >= threshold);
-      if (next !== active) {
-        active = next;
-        ctx.emit('cvm/signal', { kind: 'convergence', active });
+  ctx.sessionProjections.register({
+    key: config.projectionKey ?? 'cvmConvergence',
+    stateVersion: 1,
+    init: () => ({ streak: 0, active: false }),
+    apply: (state, event) => {
+      try {
+        if (event?.type !== 'tool/call') return state;
+        const tool = event.data?.name;
+        if (!tool) return state;
+        const streak = readTools.has(tool) ? state.streak + 1 : 0;
+        const active = streak >= threshold;
+        if (streak === state.streak && active === state.active) return state; // 同引用 = 下游零成本
+        return { streak, active };
+      } catch (error) {
+        // fail-open：投影异常不得影响会话
+        try { ctx.logger?.warn?.('dsh-convergence: projection error (fail-open)', error); } catch { /* ignore */ }
+        return state;
       }
-    } catch (error) {
-      // fail-open：检测器异常绝不阻塞 agent
-      try { ctx.logger?.warn?.('dsh-convergence: detector error (fail-open)', error); } catch { /* ignore */ }
-    }
+    },
   });
 }
