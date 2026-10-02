@@ -76,4 +76,49 @@ t('fail-open：畸形事件不抛且状态不变', () => {
   assertTrue(!threw, '不应抛异常');
 });
 
+console.log('== same-target 模式（区分"探索"与"打转"）==');
+const TOOL_ARG = (name, path) => ({ type: 'tool/call', data: { name, arguments: JSON.stringify({ file_path: path }) } });
+t('读不同文件（探索）不触发', () => {
+  const ctx = mockCtx(); apply(ctx, { mode: 'same-target', threshold: 3 });
+  for (const p of ['a.py', 'b.py', 'c.py', 'd.py', 'e.py']) ctx.sessionProjections.feed(A, TOOL_ARG('read', p));
+  assertTrue(stateOf(ctx, 'a').active === false, '目标一直在变 = 探索，不该触发');
+});
+t('反复读同一文件（打转）触发', () => {
+  const ctx = mockCtx(); apply(ctx, { mode: 'same-target', threshold: 3 });
+  for (let i = 0; i < 3; i++) ctx.sessionProjections.feed(A, TOOL_ARG('read', 'same.py'));
+  assertTrue(stateOf(ctx, 'a').active === true, '同一目标连续 3 次应触发');
+});
+t('同一模式下 any-read 会误报、same-target 不会', () => {
+  const ctxA = mockCtx(); apply(ctxA, { mode: 'any-read', threshold: 3 });
+  const ctxS = mockCtx(); apply(ctxS, { mode: 'same-target', threshold: 3 });
+  for (const p of ['a.py', 'b.py', 'c.py']) {
+    ctxA.sessionProjections.feed(A, TOOL_ARG('read', p));
+    ctxS.sessionProjections.feed(A, TOOL_ARG('read', p));
+  }
+  assertTrue(stateOf(ctxA, 'a').active === true, 'any-read 把探索误判为打转');
+  assertTrue(stateOf(ctxS, 'a').active === false, 'same-target 正确放行探索');
+});
+t('无参数时 same-target 不触发（拿不到目标不算打转）', () => {
+  const ctx = mockCtx(); apply(ctx, { mode: 'same-target', threshold: 2 });
+  for (let i = 0; i < 4; i++) ctx.sessionProjections.feed(A, TOOL('read'));
+  assertTrue(stateOf(ctx, 'a').active === false);
+});
+
+console.log('== combo 模式（深度打转提前触发 + 广度打转兜底）==');
+t('深度打转：同目标 3 次即触发（不等 5 次）', () => {
+  const ctx = mockCtx(); apply(ctx, { mode: 'combo', threshold: 5, sameTargetThreshold: 3 });
+  for (let i = 0; i < 3; i++) ctx.sessionProjections.feed(A, TOOL_ARG('read', 'same.py'));
+  assertTrue(stateOf(ctx, 'a').active === true, '同一文件读 3 次应提前触发');
+});
+t('广度打转：读不同文件但连续 5 次只读仍触发', () => {
+  const ctx = mockCtx(); apply(ctx, { mode: 'combo', threshold: 5, sameTargetThreshold: 3 });
+  for (const p of ['a.py', 'b.py', 'c.py', 'd.py', 'e.py']) ctx.sessionProjections.feed(A, TOOL_ARG('read', p));
+  assertTrue(stateOf(ctx, 'a').active === true, '找不到同一目标时由连续只读兜底');
+});
+t('探索 3 次（不同文件）不触发', () => {
+  const ctx = mockCtx(); apply(ctx, { mode: 'combo', threshold: 5, sameTargetThreshold: 3 });
+  for (const p of ['a.py', 'b.py', 'c.py']) ctx.sessionProjections.feed(A, TOOL_ARG('read', p));
+  assertTrue(stateOf(ctx, 'a').active === false);
+});
+
 console.log(`\n通过 ${passed} 项${process.exitCode ? '（有失败）' : ''}`);
