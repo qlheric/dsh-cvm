@@ -1,0 +1,19 @@
+{
+  "name": "@qlheric/dsh-intervention",
+  "version": "0.1.0",
+  "description": "DSH 认知运行时插件：分档干预——收检测信号注入动态提示",
+  "author": "qlheric",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": {
+      "default": "./lib/index.js"
+    }
+  },
+  "license": "MIT",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "name": "@qlheric/dsh-contract",
+  "version": "0.1.0",
+  "description": "DSH 认知运行时插件：任务契约——把全局目标外部化并投影进 system prompt",
+  "author": "qlheric",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": {
+      "default": "./lib/index.js"
+    }
+  },
+  "license": "MIT",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

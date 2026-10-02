@@ -1,0 +1,3 @@
+- insert:
+    - id: intervention
+      name: '@deepseek-ai/dsh-intervention'

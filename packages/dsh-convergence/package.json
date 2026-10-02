@@ -1,0 +1,19 @@
+{
+  "name": "@qlheric/dsh-convergence",
+  "version": "0.1.0",
+  "description": "DSH 认知运行时插件：收敛判定——检测连续只读打转（doom loop）",
+  "author": "qlheric",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": {
+      "default": "./lib/index.js"
+    }
+  },
+  "license": "MIT",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

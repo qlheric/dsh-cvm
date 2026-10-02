@@ -1,0 +1,19 @@
+{
+  "name": "@qlheric/dsh-evidence",
+  "version": "0.1.0",
+  "description": "DSH 认知运行时插件：验证债务——终局门禁，声称完成≠完成",
+  "author": "qlheric",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": {
+      "default": "./lib/index.js"
+    }
+  },
+  "license": "MIT",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

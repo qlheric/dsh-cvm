@@ -1,0 +1,15 @@
+# 测试运行时（109MB 提取的 DSH 运行时）
+.dsh-runtime/
+
+# 隔离测试 home —— ⚠️ 含 .credentials.yaml（API 密钥），绝不能提交
+.test-home/
+
+# 提取的 DSH 参考源码
+_sdk/
+
+# 依赖
+node_modules/
+
+# 临时产物
+*.tmp
+_probe_*

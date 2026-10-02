@@ -1,0 +1,3 @@
+- insert:
+    - id: contract
+      name: '@deepseek-ai/dsh-contract'
