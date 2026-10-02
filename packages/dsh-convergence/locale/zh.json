@@ -1,0 +1,4 @@
+{
+  "title": "收敛判定",
+  "description": "检测连续只读打转（doom loop），按 session 独立计数。"
+}

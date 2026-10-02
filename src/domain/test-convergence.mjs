@@ -1,5 +1,5 @@
 // convergence 投影单测（sessionProjections 版）
-import { apply } from '../../.dsh-runtime/node_modules/@deepseek-ai/dsh-convergence/lib/index.js';
+import { apply } from '../../packages/dsh-convergence/lib/index.js';
 import { mockCtx } from './mock-ctx.mjs';
 
 let passed = 0;

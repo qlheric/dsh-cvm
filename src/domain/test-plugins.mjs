@@ -1,7 +1,7 @@
 // evidence / contract / intervention 投影单测（sessionProjections 版）
-import { apply as evidenceApply } from '../../.dsh-runtime/node_modules/@deepseek-ai/dsh-evidence/lib/index.js';
-import { apply as contractApply } from '../../.dsh-runtime/node_modules/@deepseek-ai/dsh-contract/lib/index.js';
-import { apply as interventionApply } from '../../.dsh-runtime/node_modules/@deepseek-ai/dsh-intervention/lib/index.js';
+import { apply as evidenceApply } from '../../packages/dsh-evidence/lib/index.js';
+import { apply as contractApply } from '../../packages/dsh-contract/lib/index.js';
+import { apply as interventionApply } from '../../packages/dsh-intervention/lib/index.js';
 import { mockCtx, agentFor } from './mock-ctx.mjs';
 
 let passed = 0;
@@ -61,6 +61,28 @@ t('donePattern 可配置', () => {
   assertTrue(evid(ctx).active === false);
   ctx.sessionProjections.feed(A, MSG('收工'));
   assertTrue(evid(ctx).active === true);
+});
+t('Premature Victory：工具报错却称完成 → active', () => {
+  const ctx = mockCtx(); evidenceApply(ctx, {});
+  ctx.sessionProjections.feed(A, TOOL('bash'));
+  ctx.sessionProjections.feed(A, { type: 'tool/result', data: { error: { name: 'ToolTimeoutError', code: 'TOOL_TIMEOUT' } } });
+  ctx.sessionProjections.feed(A, MSG('搞定了'));
+  assertTrue(evid(ctx).active === true, '工具失败 + 声称完成应触发');
+});
+t('工具失败后重试成功 → 不再 active', () => {
+  const ctx = mockCtx(); evidenceApply(ctx, {});
+  ctx.sessionProjections.feed(A, { type: 'tool/result', data: { error: { name: 'X', code: 'Y' } } });
+  ctx.sessionProjections.feed(A, MSG('搞定了'));
+  assertTrue(evid(ctx).lastToolFailed === true);
+  ctx.sessionProjections.feed(A, { type: 'tool/result', data: {} }); // 重试成功
+  assertTrue(evid(ctx).active === false, '重试成功后应解除');
+});
+t('只有工具失败、没声称完成 → 不 active', () => {
+  const ctx = mockCtx(); evidenceApply(ctx, {});
+  ctx.sessionProjections.feed(A, TOOL('edit'));
+  ctx.sessionProjections.feed(A, TOOL('bash'));
+  ctx.sessionProjections.feed(A, { type: 'tool/result', data: { error: { name: 'X', code: 'Y' } } });
+  assertTrue(evid(ctx).active === false, '没声称完成不该触发终局门禁');
 });
 
 console.log('== contract 投影 ==');

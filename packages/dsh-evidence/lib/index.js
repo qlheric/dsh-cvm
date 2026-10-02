@@ -39,8 +39,10 @@ function hasToolCall(event) {
 }
 
 /**
- * 只检测验证债务，落成 per-session 投影状态。
- * claimedDone 只在"最终回答（不含工具调用）"时判定，避免中途误触发。
+ * 只检测验证债务与"工具刚失败却称完成"，落成 per-session 投影状态。
+ * - claimedDone 只在"最终回答（不含工具调用）"时判定，避免中途误触发
+ * - lastToolFailed 取 `tool/result` 的 `error` 字段（工具确实报错）
+ * - active = claimedDone && ((wroteFile && !verified) || lastToolFailed)
  */
 export function apply(ctx, config = {}) {
   if (config.enabled === false) return;
@@ -56,8 +58,8 @@ export function apply(ctx, config = {}) {
 
   ctx.sessionProjections.register({
     key: config.projectionKey ?? 'cvmEvidence',
-    stateVersion: 1,
-    init: () => ({ wroteFile: false, verified: false, claimedDone: false, active: false }),
+    stateVersion: 2,
+    init: () => ({ wroteFile: false, verified: false, claimedDone: false, lastToolFailed: false, active: false }),
     apply: (state, event) => {
       try {
         let next = state;
@@ -68,12 +70,15 @@ export function apply(ctx, config = {}) {
           if (wroteFile !== state.wroteFile || verified !== state.verified) {
             next = { ...state, wroteFile, verified };
           }
+        } else if (event?.type === 'tool/result') {
+          const failed = Boolean(event.data?.error);
+          if (failed !== state.lastToolFailed) next = { ...state, lastToolFailed: failed };
         } else if (event?.type === 'assistant/message') {
           if (!state.claimedDone && !hasToolCall(event) && donePattern.test(extractText(event))) {
             next = { ...state, claimedDone: true };
           }
         }
-        const active = next.claimedDone && next.wroteFile && !next.verified;
+        const active = next.claimedDone && ((next.wroteFile && !next.verified) || next.lastToolFailed);
         if (active === next.active) return next;
         return { ...next, active };
       } catch (error) {

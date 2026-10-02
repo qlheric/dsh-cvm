@@ -1,0 +1,4 @@
+{
+  "title": "Convergence Guard",
+  "description": "Detects repetitive read-only stalling (doom loop), per session."
+}

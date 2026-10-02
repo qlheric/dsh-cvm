@@ -8,12 +8,32 @@
   "exports": {
     ".": {
       "default": "./lib/index.js"
-    }
+    },
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json"
   },
   "license": "MIT",
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
     }
+  },
+  "icon": "./icon.svg",
+  "files": [
+    "lib",
+    "cordis.patch.yml",
+    "icon.svg",
+    "locale",
+    "README.md"
+  ],
+  "keywords": [
+    "dsh-plugin",
+    "dsh",
+    "agent",
+    "cognitive-runtime",
+    "cvm"
+  ],
+  "scripts": {
+    "test": "node --test ../../src/domain/*.mjs"
   }
 }

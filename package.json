@@ -1,0 +1,19 @@
+{
+  "name": "dsh-cvm-workspace",
+  "private": true,
+  "version": "0.1.0",
+  "description": "dsh-cvm：DSH 认知运行时插件集（开发工作区）",
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "test": "node src/domain/test.mjs && node src/domain/test-convergence.mjs && node src/domain/test-plugins.mjs",
+    "check": "node --check packages/dsh-contract/lib/index.js && node --check packages/dsh-convergence/lib/index.js && node --check packages/dsh-evidence/lib/index.js && node --check packages/dsh-intervention/lib/index.js"
+  },
+  "devDependencies": {
+    "@deepseek-ai/dsh-llm": "*",
+    "@deepseek-ai/schemastery": "*"
+  },
+  "license": "MIT"
+}

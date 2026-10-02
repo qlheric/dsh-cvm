@@ -1,0 +1,26 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # 插件依赖 DSH 自带的两个包（不随本仓提交）；从公共 registry 装到工作区
+      - name: Install DSH-provided deps
+        run: npm install --no-save --no-audit --no-fund @deepseek-ai/schemastery @deepseek-ai/dsh-llm
+
+      - name: Syntax check (4 plugins)
+        run: npm run check
+
+      - name: Unit tests (core + convergence + plugins)
+        run: npm test
