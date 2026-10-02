@@ -26,6 +26,9 @@ const done = existsSync(outFile)
 if (done > 0) console.error(`[续跑] ${caseId} 已有 ${done} 条，从第 ${done + 1} 条继续`);
 
 for (let i = done; i < N; i++) {
+  // ★ 每轮前把 fixtures 重置回场景初始状态（评测会让模型直接改它们，
+  //   不重置就会在"上一轮已改好的文件"上继续跑 ⇒ 读数无效）
+  spawnSync('git', ['checkout', '--', 'eval/fixtures'], { cwd: ROOT, encoding: 'utf8' });
   const r = spawnSync(NODE, [join(__dirname, 'drive.mjs'), '--case', caseId], {
     cwd: ROOT,
     encoding: 'utf8',
