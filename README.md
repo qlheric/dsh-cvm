@@ -212,11 +212,11 @@
 - `dsh-evidence` 早期把 `tool/result.error` 当"工具失败"，在调试场景里**把模型正常的"看报错再改"误判成失败**，退化率反而涨到 **37.5%（比不用插件还差）**。修正为"验证工具**成功**执行才算验证过"后干扰消除。
 - `dsh-convergence` 的 `threshold` 过低（T=3）或 `combo` 的 `sameTargetThreshold` 过低，都会因**过早干预**恶化过程（见 5.3）。
 
-**`dsh-budget` 的已知边界（v1）**：
+**`dsh-budget` 的已知边界（v2）**：
 
-- **只统计当前 session，不含子 agent**。实测确认 `subagent/start` 是 **scope 事件、不进 session log**（sessionProjections 的 apply 收不到它），所以父会话无法从事件流认出"我委派了谁、他们烧了多少"。
-- **团队级聚合**（主 + 子 agent 加总）需要额外的父子识别机制，设计已写在仓库内 `设计-dsh-budget-团队级预算熔断.md`，列为 v2。
-- v1 只做**软提醒**（`agent.steer` 一次），不做硬熔断——避免"预算插件把任务掐死"这种更糟的误伤。
+- **团队聚合是"下界"，不是精确值**：v2 会把**当前活跃子 agent** 的消耗计入（靠 `ctx.on('subagent/start')` 捕获 + `ctx.get('agents').get(info.id)` 取子会话）。但**已结束的子 agent 不计**——`child` 上没有 parent 字段（实测 `parent: null`），无法可靠归属；而且实测**子 agent 往往在父会话收尾前就已结束**，所以父会话常看到 `childTokens = 0`。
+- **修过的一个真 bug**：`turn-stopping` 在**子 agent 自己的会话里也会触发**，不排除自己就会**重复计算**（实测 `ownTokens == childTokens == 16199`，团队量翻倍）。
+- v2 仍只做**软提醒**（`agent.steer` 一次），不做硬熔断——避免"预算插件把任务掐死"这种更糟的误伤。`countSubagents: false` 可退回只看当前会话。
 
 ⇒ 所以每个插件都可配置、可单独关闭；**调参要按场景标定，不能照搬默认值**。
 

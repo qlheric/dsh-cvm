@@ -2,7 +2,7 @@ import z from "@deepseek-ai/schemastery";
 import { createUserMessage } from "@deepseek-ai/dsh-llm";
 
 export const name = 'budget';
-export const inject = ['sessionProjections'];
+export const inject = ['sessionProjections', 'agents'];
 
 export const Config = z.object({
   /** token 预算上限（input+output+cache，按会话累计）。 */
@@ -15,6 +15,8 @@ export const Config = z.object({
   steerOnce: z.boolean().default(true),
   /** 总开关。 */
   enabled: z.boolean().default(true),
+  /** 是否把**活跃子 agent**的消耗计入团队总量（v2）。 */
+  countSubagents: z.boolean().default(true),
   /** 投影 key（本插件自己维护的步数统计）。 */
   projectionKey: z.string().default('cvmBudget'),
 });
@@ -29,29 +31,45 @@ function tokenTotal(totals) {
 }
 
 /**
- * 预算熔断（第一版：**按会话**）。
+ * 预算熔断。
  *
  * 数据来源全部是**官方已有投影**，本插件不重复造：
- * - token：`tokenUsage`（`dsh-token-meter` 提供的 `{ totals, last }`）
+ * - token：`tokenUsage`（`dsh-token-meter` 的 `{ totals, last }`）
  * - 步数：本插件的 `cvmBudget` 投影（数 `tool/call`）
  *
  * 行为：用到 `softRatio` 就通过 `agent/turn-stopping` **软提醒一次**
- * （steer 一条消息，不中断）；硬熔断留给后续版本与显式配置。
+ * （steer 一条消息，不中断）；不做硬熔断。
  *
- * ⚠️ 已知边界：**本版只统计当前 session**。子 agent 的消耗不在内
- * ——`subagent/start` 是 scope 事件、不进 session log，父会话无法直接
- * 从事件流认出"我委派了谁"（详见 `设计-dsh-budget-团队级预算熔断.md`）。
+ * **v2 的团队聚合**：`subagent/start` / `subagent/end` 是 scope 事件
+ * （不进 session log），用 `ctx.on` 捕获后，通过 `ctx.get('agents').get(info.id)`
+ * 拿到子 agent，把**当前活跃子 agent** 的 token 计入团队总量。
+ *
+ * ⚠️ 已知边界（v2 仍是近似）：
+ * 1. **已结束的子 agent 不计入**：`child` 上没有 parent 字段（实测 `parent: null`），
+ *    无法把已结束子 agent 的消耗可靠归到某个父会话。所以团队总量是个**下界**。
+ * 2. 活跃子 agent 集合是**插件级**的；多会话同时派人时会互相看到，单会话无影响。
  */
 export function apply(ctx, config = {}) {
   const softSteered = new Set();
-  // Config 默认值兜底：schemastery 只在 DSH 加载时填充默认值，直接调 apply 时不会
   const cfg = {
     maxTokens: config.maxTokens ?? 1_000_000,
     maxSteps: config.maxSteps ?? 200,
     softRatio: config.softRatio ?? 0.8,
     steerOnce: config.steerOnce ?? true,
     enabled: config.enabled ?? true,
+    countSubagents: config.countSubagents ?? true,
     projectionKey: config.projectionKey ?? 'cvmBudget',
+  };
+
+  /** 活跃子 agent：runId → child agent（v2 团队聚合用）。 */
+  const activeChildren = new Map();
+
+  const getAgentService = () => {
+    try { return ctx.get?.('agents'); } catch { return undefined; }
+  };
+  const readTokens = (session) => {
+    try { return tokenTotal(ctx.sessionProjections.stateOf(session, 'tokenUsage')?.totals); }
+    catch { return 0; }
   };
 
   ctx.sessionProjections.register({
@@ -74,6 +92,22 @@ export function apply(ctx, config = {}) {
     },
   });
 
+  // ── v2：团队聚合（捕获子 agent 生命周期）──
+  ctx.on('subagent/start', (info) => {
+    try {
+      if (!cfg.countSubagents) return;
+      const child = getAgentService()?.get?.(info?.id);
+      if (child) activeChildren.set(info?.runId ?? info?.id, child);
+    } catch (error) {
+      try { ctx.logger?.warn?.('dsh-budget: subagent/start error (fail-open)', error); } catch { /* ignore */ }
+    }
+  });
+  ctx.on('subagent/end', (info) => {
+    try {
+      activeChildren.delete(info?.runId ?? info?.id);
+    } catch { /* ignore */ }
+  });
+
   ctx.on('agent/turn-stopping', async ({ agent }) => {
     try {
       if (!cfg.enabled) return;
@@ -81,12 +115,23 @@ export function apply(ctx, config = {}) {
       if (!session) return;
 
       const sessionId = session.id ?? String(session);
-      const usage = ctx.sessionProjections.stateOf(session, 'tokenUsage');
       const budget = ctx.sessionProjections.stateOf(session, cfg.projectionKey);
-      const tokens = tokenTotal(usage?.totals);
       const steps = budget?.steps ?? 0;
 
-      const tokenRatio = cfg.maxTokens > 0 ? tokens / cfg.maxTokens : 0;
+      const ownTokens = readTokens(session);
+      let childTokens = 0;
+      if (cfg.countSubagents) {
+        for (const child of activeChildren.values()) {
+          // ⚠️ 必须排除自己：turn-stopping 在子 agent 自己的会话里也会触发，
+          //    而 activeChildren 是插件级的、里面就有它自己 ⇒ 不排除会重复计算。
+          const childSessionId = child?.session?.id;
+          if (childSessionId !== undefined && childSessionId === sessionId) continue;
+          childTokens += readTokens(child?.session);
+        }
+      }
+      const teamTokens = ownTokens + childTokens;
+
+      const tokenRatio = cfg.maxTokens > 0 ? teamTokens / cfg.maxTokens : 0;
       const stepRatio = cfg.maxSteps > 0 ? steps / cfg.maxSteps : 0;
       const ratio = Math.max(tokenRatio, stepRatio);
       if (ratio < cfg.softRatio) return;
@@ -95,8 +140,9 @@ export function apply(ctx, config = {}) {
       softSteered.add(sessionId);
 
       const pct = Math.round(ratio * 100);
+      const childNote = childTokens > 0 ? `（含子 agent ${childTokens.toLocaleString()}）` : '';
       const detail = tokenRatio >= stepRatio
-        ? `token ${tokens.toLocaleString()}/${cfg.maxTokens.toLocaleString()}`
+        ? `token ${teamTokens.toLocaleString()}/${cfg.maxTokens.toLocaleString()}${childNote}`
         : `步数 ${steps}/${cfg.maxSteps}`;
       agent.steer(createUserMessage({
         content: [{

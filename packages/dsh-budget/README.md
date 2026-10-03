@@ -20,14 +20,18 @@
     enabled: true
 ```
 
-## ⚠️ 已知边界（重要）
+## ⚠️ 已知边界（重要，v2 仍然是近似）
 
-**本版只统计当前 session，不含子 agent。**
+**v2 能把「当前活跃的子 agent」的消耗计入团队总量**，但有两个限制：
 
-原因：`subagent/start` 是 **scope 事件**、不进 session log（已实测：sessionProjections 的 apply 收不到它），所以父会话无法直接从事件流认出"我委派了谁、他们烧了多少"。
+1. **已结束的子 agent 不计入**。实测确认：`child` 上没有 parent 字段（`parent: null`），无法把已结束子 agent 的消耗可靠归到某个父会话。**更关键的是实测发现：子 agent 通常在自己的 `turn-stopping` 之前就结束了**，所以父会话在收尾时往往看到 `childTokens = 0` —— **这个团队总量实际上是个下界**，不是精确值。
+2. **活跃集合是插件级的**：多会话同时派人时会互相看到（单会话无影响）。
 
-**团队级聚合**（把主 + 子 agent 的消耗加总）需要额外的父子识别机制，设计见仓库内 `设计-dsh-budget-团队级预算熔断.md`，列为 v2。
+**修过的一个真 bug**：`turn-stopping` 在**子 agent 自己的会话里也会触发**，而活跃集合是插件级的、里面就有它自己 ⇒ 不排除会**重复计算**（实测 `ownTokens == childTokens == 16199`，团队量被算成 32398 翻倍）。现在聚合时按 session id 排除自己。
+
+**用法**：`countSubagents: false` 可退回"只看当前会话"。
 
 ## 与其他插件的关系
 
 正交。`convergence` 管打转、`evidence` 管验证债务、`contract` 管目标漂移，本插件只管**预算**。
+

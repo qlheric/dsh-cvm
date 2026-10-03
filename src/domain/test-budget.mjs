@@ -114,6 +114,80 @@ t('Config 默认值齐备', () => {
   assertEqual(Config({}).maxSteps, 200);
   assertEqual(Config({}).softRatio, 0.8);
   assertEqual(Config({}).enabled, true);
+  assertEqual(Config({}).countSubagents, true);
+});
+
+console.log('== v2：团队聚合（活跃子 agent 计入总量）==');
+/** 造一个带 agents service 的 ctx。 */
+function ctxWithAgents(childrenById) {
+  const ctx = mockCtx();
+  ctx.get = (name) => (name === 'agents' ? { get: (id) => childrenById[id] } : undefined);
+  return ctx;
+}
+const CHILD_TOKENS = 500;
+/** 给某个 session 塞一份 tokenUsage 投影（模拟官方 token-meter）。 */
+function seedTokens(ctx, sessionId, tokens) {
+  ctx.sessionProjections.register({
+    key: 'tokenUsage',
+    init: () => ({ totals: {} }),
+    apply: (s, e) => (e?.type === 'setUsage' ? { totals: e.data.totals } : s),
+  });
+  ctx.sessionProjections.feed({ id: sessionId }, {
+    type: 'setUsage',
+    data: { totals: { uncachedInputTokens: tokens, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 } },
+  });
+}
+t('活跃子 agent 的 token 计入团队总量（触发提醒）', () => {
+  const child = { session: { id: 'child-1' } };
+  const ctx = ctxWithAgents({ 'child-1': child });
+  apply(ctx, { maxTokens: 1000, maxSteps: 999, softRatio: 0.5 });
+  seedTokens(ctx, 'main', 100);      // 自己只用了 100
+  seedTokens(ctx, 'child-1', 600);   // 子 agent 用了 600
+  // 子 agent 上线
+  assertTrue(typeof ctx.handlers['subagent/start'] === 'function', '应注册 subagent/start');
+  ctx.handlers['subagent/start']({ runId: 'r1', id: 'child-1' });
+  const steered = [];
+  ctx.handlers['agent/turn-stopping']({ agent: makeAgent('main', steered) });
+  assertEqual(steered.length, 1, '团队总量 700/1000 应触发（单看自己只有 100 不该触发）');
+  assertTrue(steered[0].content[0].text.includes('含子 agent'), '提示里应注明含子 agent');
+});
+t('没派子 agent 时只看自己', () => {
+  const ctx = ctxWithAgents({});
+  apply(ctx, { maxTokens: 1000, maxSteps: 999, softRatio: 0.5 });
+  seedTokens(ctx, 'main', 100);
+  const steered = [];
+  ctx.handlers['agent/turn-stopping']({ agent: makeAgent('main', steered) });
+  assertEqual(steered.length, 0, '自己只用 100 不该触发');
+});
+t('subagent/end 后该子 agent 不再计入', () => {
+  const child = { session: { id: 'child-2' } };
+  const ctx = ctxWithAgents({ 'child-2': child });
+  apply(ctx, { maxTokens: 1000, maxSteps: 999, softRatio: 0.5 });
+  seedTokens(ctx, 'main', 100);
+  seedTokens(ctx, 'child-2', 600);
+  ctx.handlers['subagent/start']({ runId: 'r2', id: 'child-2' });
+  ctx.handlers['subagent/end']({ runId: 'r2', id: 'child-2' });
+  const steered = [];
+  ctx.handlers['agent/turn-stopping']({ agent: makeAgent('main', steered) });
+  assertEqual(steered.length, 0, '已结束的子 agent 不计入（v2 是下界）');
+});
+t('countSubagents:false 时退回只看自己', () => {
+  const child = { session: { id: 'child-3' } };
+  const ctx = ctxWithAgents({ 'child-3': child });
+  apply(ctx, { maxTokens: 1000, maxSteps: 999, softRatio: 0.5, countSubagents: false });
+  seedTokens(ctx, 'main', 100);
+  seedTokens(ctx, 'child-3', 900);
+  ctx.handlers['subagent/start']({ runId: 'r3', id: 'child-3' });
+  const steered = [];
+  ctx.handlers['agent/turn-stopping']({ agent: makeAgent('main', steered) });
+  assertEqual(steered.length, 0, '关掉团队聚合后不应因别人的消耗触发');
+});
+t('拿不到 agents service 也不抛（fail-open）', () => {
+  const ctx = mockCtx(); // 没有 ctx.get
+  apply(ctx, {});
+  let threw = false;
+  try { ctx.handlers['subagent/start']({ runId: 'r4', id: 'x' }); } catch { threw = true; }
+  assertTrue(!threw, '不应抛异常');
 });
 
 console.log(`\n通过 ${passed} 项${failed ? `（失败 ${failed}）` : ''}`);
