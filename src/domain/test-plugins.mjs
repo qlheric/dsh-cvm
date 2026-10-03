@@ -183,4 +183,47 @@ t('steerAtTurnStop:false 时不注册门禁', () => {
   assertTrue(!ctx.handlers['agent/turn-stopping']);
 });
 
+console.log('== contract：约束提取（C8 场景的关键）==');
+const renderOf = (ctx, session) => ctx.variables['cvm_contract']({ agent: { session } });
+t('首条消息里的硬约束被提取为原话', () => {
+  const ctx = mockCtx(); contractApply(ctx, {});
+  ctx.sessionProjections.feed(A, USER('请修复 bug。硬约束：只准改 main.py；helper.py 一个字都不许动。'));
+  const st = convState(ctx, 'a');
+  assertTrue(Array.isArray(st.constraints) && st.constraints.length === 2, `应提取 2 条，实际 ${JSON.stringify(st?.constraints)}`);
+  assertTrue(st.constraints[0].includes('只准改 main.py'), '约束应按原话保留');
+});
+t('渲染出的契约含约束原话', () => {
+  const ctx = mockCtx(); contractApply(ctx, {});
+  ctx.sessionProjections.feed(A, USER('硬约束：只准改 main.py。'));
+  const text = renderOf(ctx, { id: 'a' });
+  assertTrue(text.includes('约束（用户原话'), '应渲染约束段');
+  assertTrue(text.includes('只准改 main.py'), '应含约束原文');
+});
+t('没有约束时不写"（无）"（沉默优于错误）', () => {
+  const ctx = mockCtx(); contractApply(ctx, {});
+  ctx.sessionProjections.feed(A, USER('请把这个脚本改对。'));
+  const text = renderOf(ctx, { id: 'a' });
+  assertTrue(!text.includes('（无）'), '不能写"约束：（无）"误导模型');
+  assertTrue(!text.includes('未限定'), '不能写"范围：（未限定）"');
+});
+t('契约含"约束下别卡住"的行为准则', () => {
+  const ctx = mockCtx(); contractApply(ctx, {});
+  ctx.sessionProjections.feed(A, USER('硬约束：只准改 main.py。'));
+  const text = renderOf(ctx, { id: 'a' });
+  assertTrue(text.includes('不要放弃'), '应含"约束冲突时换一条路"的准则');
+});
+t('契约一旦确定不再变化（守前缀缓存字节稳定）', () => {
+  const ctx = mockCtx(); contractApply(ctx, {});
+  ctx.sessionProjections.feed(A, USER('第一轮目标'));
+  const first = convState(ctx, 'a');
+  ctx.sessionProjections.feed(A, USER('第二轮又说了别的事，且含硬约束：不许改 util.py'));
+  const second = convState(ctx, 'a');
+  assertTrue(first === second, '契约不应被后续消息改写');
+});
+t('运行时注入（非 user 来源）不建立契约', () => {
+  const ctx = mockCtx(); contractApply(ctx, {});
+  ctx.sessionProjections.feed(A, { type: 'user/message', data: { content: [{ type: 'text', text: '系统注入' }], source: { kind: 'runtime-context' } } });
+  assertTrue(convState(ctx, 'a') === null, '非 user 来源不应成为契约');
+});
+
 console.log(`\n通过 ${passed} 项${process.exitCode ? '（有失败）' : ''}`);
