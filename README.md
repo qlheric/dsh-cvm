@@ -42,20 +42,19 @@
 ] } } }
 ```
 
-或一条命令装齐（**实测通过**，会在 profile 里自动写入 `bundles`）：
+**方式二：一键脚本（推荐，带 dry-run 与自检）**
 
 ```bash
-dsh plugin --profile <你的profile> add \
-  "github:qlheric/dsh-cvm#path:packages/dsh-contract" \
-  "github:qlheric/dsh-cvm#path:packages/dsh-convergence" \
-  "github:qlheric/dsh-cvm#path:packages/dsh-evidence" \
-  "github:qlheric/dsh-cvm#path:packages/dsh-intervention" \
-  "github:qlheric/dsh-cvm#path:packages/dsh-budget"
+node install.mjs                                   # dry-run：只打印将要执行的命令
+node install.mjs --apply --profile <你的profile>   # 真装（5 个包一条命令 + 自动自检）
+node install.mjs --check --profile <你的profile>   # 只自检（0/5 时退出码非 0）
 ```
+
+脚本会：探测 `DSH_HOME` 与现有 profile → 打印安装命令 → `--apply` 时执行 → 用 `--dump-config` **自检 5 个层是否真的加载**。
+`dsh` 不在 PATH 时用 `--dsh "node /path/to/dsh/lib/bin.js"` 指定。**默认只做 dry-run**，因为有些 profile 是生产环境。
 
 > ⚠️ **不要用 `add github:qlheric/dsh-cvm`**（不带 `#path:`）——本仓库根是 private 的 workspace 包，
 > 那样装到的只是**根包**，`dsh` 会警告 `declares no dsh.bundle`，**一个插件都不会生效**（我们实测踩过）。
-> 装完用 `dsh --profile <你的profile> --dump-config` 复核：应看到 `# == @qlheric/dsh-*` 的层。
 
 不改 `dsh-agent-loop`，只用官方接缝：`sessionProjections`、`systemPrompt.section/variable`、`agent/turn-stopping`。
 
