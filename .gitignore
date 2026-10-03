@@ -14,16 +14,9 @@ node_modules/
 *.tmp
 _probe_*
 
-# 评测跑动会在 fixtures 里留下临时文件 —— 白名单模式：
-# 只放行场景初始文件，其余（模型产物、探针）一律忽略
+# 评测运行状态：fixtures 每轮由 eval/scenarios 重建，不入库（只留 README）
 eval/fixtures/*
 !eval/fixtures/README.md
-!eval/fixtures/script.py
-!eval/fixtures/util.py
-!eval/fixtures/sample.csv
-!eval/fixtures/app.py
-!eval/fixtures/lib.py
-!eval/fixtures/data.csv
 
 # 评测结果落盘（本地产物，不入库）
 eval/results/

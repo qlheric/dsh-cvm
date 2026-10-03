@@ -1,7 +1,7 @@
 // 批量评测：结果逐条落盘（JSONL），支持断点续跑，中断不丢数据
 // 用法：node batch-eval.mjs <caseId> <总次数N> [--reset] [--label A|B]
 import { spawnSync } from 'node:child_process';
-import { appendFileSync, readFileSync, existsSync, mkdirSync, rmSync } from 'node:fs';
+import { appendFileSync, readFileSync, existsSync, mkdirSync, rmSync, readdirSync, copyFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -23,15 +23,30 @@ mkdirSync(OUTDIR, { recursive: true });
 const outFile = join(OUTDIR, `${caseId}${label ? `-${label}` : ''}.jsonl`);
 if (reset && existsSync(outFile)) rmSync(outFile);
 
+/** 把 eval/fixtures 重置回 eval/scenarios 的初始状态（清掉上一轮的模型产物）。 */
+function resetFixtures() {
+  const scen = join(ROOT, 'eval', 'scenarios');
+  const fix = join(ROOT, 'eval', 'fixtures');
+  mkdirSync(fix, { recursive: true });
+  for (const name of readdirSync(fix)) {
+    if (name === 'README.md') continue; // 场景说明保留
+    rmSync(join(fix, name), { recursive: true, force: true });
+  }
+  for (const name of readdirSync(scen)) {
+    copyFileSync(join(scen, name), join(fix, name));
+  }
+}
+
 const done = existsSync(outFile)
   ? readFileSync(outFile, 'utf8').split('\n').filter((l) => l.trim() !== '').length
   : 0;
 if (done > 0) console.error(`[续跑] ${caseId} 已有 ${done} 条，从第 ${done + 1} 条继续`);
 
 for (let i = done; i < N; i++) {
-  // ★ 每轮前把 fixtures 重置回场景初始状态（评测会让模型直接改它们，
-  //   不重置就会在"上一轮已改好的文件"上继续跑 ⇒ 读数无效）
-  spawnSync('git', ['checkout', '--', 'eval/fixtures'], { cwd: ROOT, encoding: 'utf8' });
+  // ★ 每轮前把 fixtures 重置回**场景模板**（eval/scenarios/）的初始状态。
+  //   不用 git checkout —— 因为 git 里的版本可能已被上一轮的模型产物污染
+  //   （我们踩过两次：评测改的文件被 git add -A 一起提交 ⇒ 后续读数全假）。
+  resetFixtures();
   const r = spawnSync(NODE, [join(__dirname, 'drive.mjs'), '--case', caseId], {
     cwd: ROOT,
     encoding: 'utf8',

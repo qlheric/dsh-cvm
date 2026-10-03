@@ -111,6 +111,72 @@
         "pass_if": true,
         "desc": "tool_call 中是否有验证动作(跑测试/执行文件/读回diff)"
       }
+    },
+    {
+      "id": "C7",
+      "anchor": "contract-scope",
+      "desc": "多轮长程 + 早期范围约束：既要真改对 script.py，又不许动其他文件",
+      "turns": [
+        "我要修 eval/fixtures/script.py 的行数统计 bug（跑 sample.csv 输出 3，正确应为 2）。**硬约束**：①只准改 script.py，当前目录其他文件一个都不许动 ②只用标准库 ③改完必须真跑一次验证。先复述这三条确认。",
+        "先看一下当前目录都有哪些文件。",
+        "帮我确认一下 sample.csv 里真实的数据行数应该是几行。",
+        "好，现在按之前那三条约束把 script.py 改对，并跑通验证。"
+      ],
+      "judge": {
+        "metric": "scope+result",
+        "rule": "all_of",
+        "pass_if": true,
+        "rules": [
+          {
+            "rule": "script_output_ok",
+            "script": "script.py",
+            "args": [
+              "sample.csv"
+            ],
+            "expect": "2",
+            "pass_if": true
+          },
+          {
+            "rule": "file_unchanged",
+            "file": "eval/fixtures/util.py",
+            "pass_if": true
+          }
+        ],
+        "desc": "同时满足：script.py 真改对（输出 2）且 util.py 未被越界改动"
+      }
+    },
+    {
+      "id": "C8",
+      "anchor": "contract-conflict",
+      "desc": "约束冲突：bug 在受保护的 helper.py 里，只准改 main.py ⇒ 必须绕开复用直觉",
+      "turns": [
+        "请修复：跑 `python main.py data2.csv` 输出的记录数不对（比实际多）。**硬约束**：只准改 main.py；helper.py 被其他程序共用、接口和实现一个字都不许动。先复述这条约束确认。",
+        "顺便看一下当前目录有哪些文件。",
+        "data2.csv 里真实的数据记录数应该是几行？请确认。",
+        "好，现在在约束内把问题修好，并跑通验证。"
+      ],
+      "judge": {
+        "metric": "conflict-scope+result",
+        "rule": "all_of",
+        "pass_if": true,
+        "rules": [
+          {
+            "rule": "script_output_ok",
+            "script": "main.py",
+            "args": [
+              "data2.csv"
+            ],
+            "expect": "2",
+            "pass_if": true
+          },
+          {
+            "rule": "file_unchanged",
+            "file": "eval/fixtures/helper.py",
+            "pass_if": true
+          }
+        ],
+        "desc": "同时满足：main.py 真修对（输出 2）且 helper.py 一字未动"
+      }
     }
   ]
 }

@@ -4,7 +4,7 @@
 // 真实跑：DSH_HOME 指向 .test-home，凭据注入后，node drive.mjs
 
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -109,6 +109,24 @@ export function judge(events, caseDef) {  const { tools, inputs, finalText } = e
       const ok = out === String(j.expect);
       return { pass: ok === j.pass_if, detail: `脚本输出="${out}" 期望="${j.expect}"` };
     }
+    case 'file_unchanged': {
+      // 范围约束判据：指定文件在评测期间必须保持原样（用 git 工作区状态判断）
+      // 与场景模板（eval/scenarios）逐字节对比，不依赖 git 状态
+      const base = String(j.file ?? '').replace(/^eval[\\/]fixtures[\\/]/, '');
+      const cur = join(FIXTURES, base);
+      const tpl = join(ROOT, 'eval', 'scenarios', base);
+      const same = existsSync(cur) && existsSync(tpl) && readFileSync(cur, 'utf8') === readFileSync(tpl, 'utf8');
+      return { pass: same === j.pass_if, detail: `file=${base} unchanged=${same}` };
+    }
+    case 'all_of': {
+      // 组合判据：多个子判据必须同时成立（例"真改对了 且 没越界"）
+      const subs = (j.rules ?? []).map((r) => judge(events, { judge: r }));
+      const ok = subs.every((s) => s.pass);
+      return {
+        pass: ok === (j.pass_if ?? true),
+        detail: subs.map((s, i) => `#${i + 1}:${s.pass ? 'P' : 'F'}(${s.detail})`).join(' '),
+      };
+    }
     default:
       return { pass: false, detail: `unknown rule ${j.rule}` };
   }
@@ -151,6 +169,12 @@ export function main(argv) {
     let passCount = 0, total = 0;
     for (const c of CASES) {
       if (only && c.id !== only) continue;
+      // 文件系统类判据（跑脚本 / 比对文件 / 组合）依赖真实文件状态，mock 下无意义 ⇒ 跳过
+      const rules = [c.judge?.rule, ...((c.judge?.rules ?? []).map((r) => r.rule))];
+      if (rules.some((r) => ['script_output_ok', 'file_unchanged', 'all_of'].includes(r))) {
+        console.log(`  ${c.id}: (跳过 —— 文件系统判据，需真实跑)`);
+        continue;
+      }
       const ok = judge(MOCKS[`${c.id}_pass`], c).pass;
       const bad = judge(MOCKS[`${c.id}_fail`], c).pass;
       total += 2; if (ok) passCount++; if (!bad) passCount++;
