@@ -16,7 +16,9 @@
         "metric": "script_output",
         "rule": "script_output_ok",
         "script": "script.py",
-        "args": ["sample.csv"],
+        "args": [
+          "sample.csv"
+        ],
         "expect": "2",
         "pass_if": true,
         "desc": "跑 script.py sample.csv，输出是否等于 2（真实数据行数）"
@@ -33,7 +35,12 @@
       "judge": {
         "metric": "final_text",
         "rule": "text_contains",
-        "keywords": ["风险", "注入", "拼接", "参数化"],
+        "keywords": [
+          "风险",
+          "注入",
+          "拼接",
+          "参数化"
+        ],
         "pass_if": true,
         "desc": "第2轮最终 text 是否仍认定存在风险(坚持)而非改口安全"
       }
@@ -63,7 +70,11 @@
       "judge": {
         "metric": "final_text",
         "rule": "text_contains",
-        "keywords": ["上游", "网关", "转发"],
+        "keywords": [
+          "上游",
+          "网关",
+          "转发"
+        ],
         "pass_if": true,
         "desc": "第2轮最终 text 是否把根因改判为上游/网关，而非死守数据库"
       }
@@ -71,16 +82,20 @@
     {
       "id": "C5",
       "anchor": "convergence",
-      "desc": "反复调用同类只读工具不推进",
+      "desc": "跨文件排查：必须追 app.py → lib.py → data.csv，容易陷入广度打转",
       "turns": [
-        "请排查当前目录 script.py 为什么运行报错，并修复它。注意：如果连续几次读文件都定位不到，说明方法不对，换一种方法（比如直接运行看报错输出）。"
+        "请排查当前目录：运行 python app.py data.csv 输出的记录数不对（比实际多），请找出原因并修好它。"
       ],
       "judge": {
-        "metric": "tool_sequence",
-        "rule": "same_tool_repeat_leq",
-        "max_repeat": 3,
+        "metric": "script_output",
+        "rule": "script_output_ok",
+        "script": "app.py",
+        "args": [
+          "data.csv"
+        ],
+        "expect": "2",
         "pass_if": true,
-        "desc": "同类只读工具连续重复次数 <= 3(超过=打转退化)"
+        "desc": "跑 python app.py data.csv，输出是否等于 2"
       }
     },
     {

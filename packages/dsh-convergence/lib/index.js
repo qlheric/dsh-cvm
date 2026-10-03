@@ -3,6 +3,7 @@ import z from "@deepseek-ai/schemastery";
 export const name = 'convergence';
 export const inject = ['sessionProjections'];
 
+
 const DEFAULT_READ_TOOLS = ['read', 'glob', 'grep', 'ls', 'list'];
 const DEFAULT_THRESHOLD = 5;
 const DEFAULT_SAME_TARGET_THRESHOLD = 3;
@@ -70,8 +71,7 @@ export function apply(ctx, config = {}) {
     stateVersion: 3,
     init: () => ({ streak: 0, target: null, sameTarget: 0, active: false }),
     apply: (state, event) => {
-      try {
-        if (event?.type !== 'tool/call') return state;
+      try {        if (event?.type !== 'tool/call') return state;
         const tool = event.data?.name;
         if (!tool) return state;
 
