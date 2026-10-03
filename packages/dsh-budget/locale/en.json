@@ -1,0 +1,4 @@
+{
+  "title": "Budget Guard",
+  "description": "Caps a session's token/step usage and soft-nudges once when the threshold is reached."
+}

@@ -71,7 +71,8 @@ export function apply(ctx, config = {}) {
     stateVersion: 3,
     init: () => ({ streak: 0, target: null, sameTarget: 0, active: false }),
     apply: (state, event) => {
-      try {        if (event?.type !== 'tool/call') return state;
+      try {
+        if (event?.type !== 'tool/call') return state;
         const tool = event.data?.name;
         if (!tool) return state;
 

@@ -1,18 +1,18 @@
 # dsh-cvm · DSH 认知运行时插件集
 
 > 给 DeepSeek Harness（DSH）加一层**认知运行时**——用确定性规则管理模型的概率行为。
-> 四个正交的 Cordis 插件，零侵入、可组合、可演进。
+> 五个正交的 Cordis 插件，零侵入、可组合、可演进。
 
 ## 一、这是什么 / 不是什么
 
-**是**：给**强模型**加的一层**过程保险**。它盯着三件事——目标有没有丢、有没有在原地打转、声称完成时有没有真的验证过——在该出手时注入提示、必要时强制再走一步。
+**是**：给**强模型**加的一层**过程保险**。它盯着四件事——目标有没有丢、有没有在原地打转、声称完成时有没有真的验证过、**预算有没有超**——在该出手时注入提示、必要时强制再走一步。
 
 **不是**：不是"提升模型能力"的插件，也不是 prompt 技巧合集。模型越强，自己就越会验证、越会换方法，**想"补能力"的空间天然很小**。
 
-**适用**：长任务、易被局部信号带偏的场景（改了文件要它真跑起来）、无人看管时要防打转。
+**适用**：长任务、易被局部信号带偏的场景（改了文件要它真跑起来）、无人看管时要防打转、要控成本。
 **不适用**：一句话问答；或你不想让任何规则打断模型。
 
-## 二、四个插件（正交）
+## 二、五个插件（正交）
 
 | 插件 | 职责 | 状态 / 接缝 | 对抗 |
 |---|---|---|---|
@@ -20,8 +20,11 @@
 | `dsh-convergence` | 检测「连续只读打转」（跨工具、按 session 独立计数） | `sessionProjections`(`cvmConvergence`) | 收敛坍缩（doom loop） |
 | `dsh-evidence` | 检测「声称完成 + 改了文件 + 没有一次成功验证」 | `sessionProjections`(`cvmEvidence`) | 验证债务 |
 | `dsh-intervention` | **唯一注入点**：读前三个的投影 → 注入提示 / 收尾时 `agent.steer` 强制再走一步 | `systemPrompt.section` + `agent/turn-stopping` | 把检测变成行动 |
+| `dsh-budget` | 统计 token / 步数，到阈值**软提醒一次**（不中断） | `sessionProjections`(`cvmBudget`) + 读官方 `tokenUsage` + `agent/turn-stopping` | 成本失控 |
 
-**正交**：前三个只**写投影状态**，intervention 只**读状态并行动**，互不 import。状态全走官方 `ctx.sessionProjections`（纯函数 apply、可 checkpoint、多会话天然隔离）。
+**正交**：contract / convergence / evidence / budget 只**写状态**，intervention 只**读状态并行动**，互不 import。状态全走官方 `ctx.sessionProjections`（纯函数 apply、可 checkpoint、多会话天然隔离）。
+
+> ⚠️ `dsh-budget` **目前只统计当前 session**，不含子 agent。原因与后续计划见文末"已知代价"。
 
 ## 三、安装
 
@@ -31,10 +34,11 @@
 { "dsh": { "profile": { "bundles": [
   "@deepseek-ai/dsh-base",
   "@deepseek-ai/dsh-headless",
-  "@qlheric/dsh-contract",
-  "@qlheric/dsh-convergence",
-  "@qlheric/dsh-evidence",
-  "@qlheric/dsh-intervention"
+  "@deepseek-ai/dsh-contract",
+  "@deepseek-ai/dsh-convergence",
+  "@deepseek-ai/dsh-evidence",
+  "@deepseek-ai/dsh-intervention",
+  "@deepseek-ai/dsh-budget"
 ] } } }
 ```
 
@@ -57,6 +61,11 @@
 - id: evidence
   config:
     enabled: false          # 整个终局门禁关掉
+- id: budget
+  config:
+    maxTokens: 1000000      # token 上限（默认 100 万）
+    maxSteps: 200           # 步数上限
+    softRatio: 0.8          # 到 80% 先软提醒
 ```
 
 ## 五、实测（诚实版）
@@ -148,6 +157,12 @@
 
 - `dsh-evidence` 早期把 `tool/result.error` 当"工具失败"，在调试场景里**把模型正常的"看报错再改"误判成失败**，退化率反而涨到 **37.5%（比不用插件还差）**。修正为"验证工具**成功**执行才算验证过"后干扰消除。
 - `dsh-convergence` 的 `threshold` 过低（T=3）或 `combo` 的 `sameTargetThreshold` 过低，都会因**过早干预**恶化过程（见 5.3）。
+
+**`dsh-budget` 的已知边界（v1）**：
+
+- **只统计当前 session，不含子 agent**。实测确认 `subagent/start` 是 **scope 事件、不进 session log**（sessionProjections 的 apply 收不到它），所以父会话无法从事件流认出"我委派了谁、他们烧了多少"。
+- **团队级聚合**（主 + 子 agent 加总）需要额外的父子识别机制，设计已写在仓库内 `设计-dsh-budget-团队级预算熔断.md`，列为 v2。
+- v1 只做**软提醒**（`agent.steer` 一次），不做硬熔断——避免"预算插件把任务掐死"这种更糟的误伤。
 
 ⇒ 所以每个插件都可配置、可单独关闭；**调参要按场景标定，不能照搬默认值**。
 

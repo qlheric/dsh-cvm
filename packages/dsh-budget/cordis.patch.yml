@@ -1,0 +1,3 @@
+- insert:
+    - id: budget
+      name: '@qlheric/dsh-budget'

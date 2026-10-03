@@ -8,8 +8,8 @@
     "packages/*"
   ],
   "scripts": {
-    "test": "node src/domain/test.mjs && node src/domain/test-convergence.mjs && node src/domain/test-plugins.mjs",
-    "check": "node --check packages/dsh-contract/lib/index.js && node --check packages/dsh-convergence/lib/index.js && node --check packages/dsh-evidence/lib/index.js && node --check packages/dsh-intervention/lib/index.js"
+    "test": "node src/domain/test.mjs && node src/domain/test-convergence.mjs && node src/domain/test-plugins.mjs && node src/domain/test-budget.mjs",
+    "check": "node --check packages/dsh-contract/lib/index.js && node --check packages/dsh-convergence/lib/index.js && node --check packages/dsh-evidence/lib/index.js && node --check packages/dsh-intervention/lib/index.js && node --check packages/dsh-budget/lib/index.js"
   },
   "devDependencies": {
     "@deepseek-ai/dsh-llm": "*",

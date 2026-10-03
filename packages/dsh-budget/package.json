@@ -1,0 +1,40 @@
+{
+  "name": "@qlheric/dsh-budget",
+  "version": "0.1.0",
+  "description": "DSH 认知运行时插件：预算熔断——给 agent 的 token/步数设上限，超限先软提醒再熔断",
+  "author": "qlheric",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": {
+      "default": "./lib/index.js"
+    },
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json"
+  },
+  "license": "MIT",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "icon": "./icon.svg",
+  "files": [
+    "lib",
+    "cordis.patch.yml",
+    "icon.svg",
+    "locale",
+    "README.md"
+  ],
+  "keywords": [
+    "dsh-plugin",
+    "dsh",
+    "agent",
+    "cognitive-runtime",
+    "cvm",
+    "budget"
+  ],
+  "scripts": {
+    "test": "node --test ../../src/domain/*.mjs"
+  }
+}
