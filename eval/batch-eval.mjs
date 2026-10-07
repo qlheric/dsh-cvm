@@ -79,6 +79,9 @@ console.log(JSON.stringify({
     steps: avg('steps'), reads: avg('reads'), writes: avg('writes'),
     verifies: avg('verifies'), maxReadStreak: avg('maxReadStreak'), distinctTools: avg('distinctTools'),
   },
+  成本均值: withMetrics.length === 0 ? null : {
+    totalTokens: avg('totalTokens'), wallMs: Math.round(avg('wallMs')),
+  },
 }, null, 2));
 
 function countPass(file) {

@@ -24,3 +24,6 @@ eval/results/
 # Python 缓存
 __pycache__/
 *.pyc
+
+# 代码索引缓存
+.dsh-code-index/

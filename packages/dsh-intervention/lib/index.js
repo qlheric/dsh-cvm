@@ -5,7 +5,7 @@ export const name = 'intervention';
 export const inject = ['systemPrompt', 'sessionProjections'];
 
 const DEFAULT_CONVERGENCE_HINT =
-  '⚠️ 运行时检测：你已经连续多次只读操作却没有推进，可能陷入了原地打转。请换一种方法——例如直接执行/运行看真实输出、换一个假设、或从另一个入口文件切入。注意：目标是让任务真正完成，而不是继续收集信息。';
+  '停止读文件，直接改最可疑处并运行验证——验证一次就够，不要反复验证；不确定就运行最小复现命令；信息不足就用一句话说明卡点。';
 const DEFAULT_EVIDENCE_HINT =
   '⚠️ 运行时检测：你已声称完成，但修改了文件后从未成功验证过。请先运行脚本/测试确认改动真的生效，再交付；否则应视为未完成。';
 
@@ -42,7 +42,11 @@ export function apply(ctx, config = {}) {
   const hintFor = (session) => {
     try {
       if (!session) return '';
-      if (ctx.sessionProjections.stateOf(session, convergenceKey)?.active) return hints.convergence;
+      const conv = ctx.sessionProjections.stateOf(session, convergenceKey);
+      if (conv?.active) {
+        const n = typeof conv.streak === 'number' ? conv.streak : '';
+        return `⚠️ 运行时检测：已连续 ${n} 次只读、无推进。${hints.convergence}`;
+      }
       if (ctx.sessionProjections.stateOf(session, evidenceKey)?.active) return hints.evidence;
       return '';
     } catch (error) {

@@ -49,6 +49,35 @@ export function extract(events) {
   return { tools, inputs, finalText, sessionId };
 }
 
+// ── 成本提取：从 --json 的 step_end 状态事件里累加 token（单任务成本口径）──
+// step_end 事件形如 { type:"status", phase:"step_end", turn, step, usage:{inputTokens,outputTokens,...} }
+export function extractUsage(events) {
+  let inputTokens = 0, outputTokens = 0, cacheReadTokens = 0, cacheWriteTokens = 0;
+  let steps = 0;
+  for (const e of events) {
+    if (e?.type === 'status' && e?.phase === 'step_end') {
+      steps += 1;
+      const u = e.usage ?? {};
+      inputTokens += u.inputTokens ?? 0;
+      outputTokens += u.outputTokens ?? 0;
+      cacheReadTokens += u.cacheReadTokens ?? 0;
+      cacheWriteTokens += u.cacheWriteTokens ?? 0;
+    }
+  }
+  return { inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, steps };
+}
+
+// 成本加权（区分缓存命中 vs 未命中：cache read 0.1×，cache write 1.25×，其余 1.0×）
+// 关键：缓存命中与否不改变 token「数量」，只改变「计费」——简单相加看不出缓存问题，必须加权。
+export function costWeighted(u) {
+  const total = (u.inputTokens ?? 0) + (u.outputTokens ?? 0) + (u.cacheReadTokens ?? 0) + (u.cacheWriteTokens ?? 0);
+  const cost = (u.inputTokens ?? 0) * 1.0 + (u.outputTokens ?? 0) * 1.0
+    + (u.cacheReadTokens ?? 0) * 0.1 + (u.cacheWriteTokens ?? 0) * 1.25;
+  const cacheInput = (u.inputTokens ?? 0) + (u.cacheReadTokens ?? 0) + (u.cacheWriteTokens ?? 0);
+  const cacheReadRatio = cacheInput > 0 ? (u.cacheReadTokens ?? 0) / cacheInput : 0;
+  return { total, cost, cacheReadRatio };
+}
+
 // ── 过程指标（比"最终成败"更能体现运行时监督的价值）──
 export const READ_TOOL_SET = ['read', 'glob', 'grep', 'ls', 'list'];
 export const WRITE_TOOL_SET = ['edit', 'write', 'str_replace_editor'];
@@ -137,13 +166,14 @@ export function runHeadless(prompt, sessionId) {
   const args = [DSH_BIN, '--profile', 'headless', '--json'];
   if (sessionId) args.push('--session-id', sessionId);
   args.push(prompt);
+  const t0 = Date.now();
   const r = spawnSync(NODE, args, {
     cwd: FIXTURES,
     env: { ...process.env, DSH_HOME },
     encoding: 'utf8',
     timeout: 300000,
   });
-  return { stdout: r.stdout, stderr: r.stderr, code: r.status };
+  return { stdout: r.stdout, stderr: r.stderr, code: r.status, wallMs: Date.now() - t0 };
 }
 
 // ── mock 事件流（单测用，覆盖 6 判据的正反例）──
@@ -189,15 +219,30 @@ export function main(argv) {
   for (const c of CASES) {
     if (only && c.id !== only) continue;
     let sessionId = null;
+    const usage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 };
+    let wallMs = 0;
     for (let t = 0; t < c.turns.length; t++) {
       const r = runHeadless(c.turns[t], sessionId);
+      wallMs += r.wallMs ?? 0;
       if (r.code !== 0) { results.push({ id: c.id, pass: false, detail: `exit ${r.code}: ${r.stderr?.slice(0, 200)}` }); break; }
       const events = parseEvents(r.stdout);
       sessionId = extract(events).sessionId;
+      const u = extractUsage(events);
+      usage.inputTokens += u.inputTokens;
+      usage.outputTokens += u.outputTokens;
+      usage.cacheReadTokens += u.cacheReadTokens;
+      usage.cacheWriteTokens += u.cacheWriteTokens;
       if (t === c.turns.length - 1) {
         const j = judge(events, c);
         const ex = extract(events);
-        results.push({ id: c.id, pass: j.pass, detail: j.detail, metrics: metricsOf(ex.tools) });
+        const { total: totalTokens, cost: costTokens, cacheReadRatio } = costWeighted(usage);
+        results.push({ id: c.id, pass: j.pass, detail: j.detail, metrics: {
+          ...metricsOf(ex.tools),
+          totalTokens, costTokens, cacheReadRatio,
+          inputTokens: usage.inputTokens, outputTokens: usage.outputTokens,
+          cacheReadTokens: usage.cacheReadTokens, cacheWriteTokens: usage.cacheWriteTokens,
+          wallMs,
+        } });
       }
     }
   }
