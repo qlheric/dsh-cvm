@@ -125,7 +125,7 @@ t('打转时注入打转提示', () => {
   ctx.sessionProjections.register({ key: 'cvmConvergence2', init: () => ({ active: true }), apply: (s) => s });
   interventionApply(ctx, { convergenceKey: 'cvmConvergence2', evidenceKey: 'nope' });
   const hint = ctx.variables['cvm_intervention_hint']({ agent: agentFor('a') });
-  assertTrue(hint.includes('打转'), '应注入打转提示');
+  assertTrue(hint.includes('只读'), '应注入打转提示（语义标记：只读）');
 });
 t('无信号 → 空提示（守前缀缓存）', () => {
   const ctx = mockCtx();
@@ -154,7 +154,7 @@ t('有信号时 steer 一次（强制再走一步）', () => {
   assertTrue(Boolean(h), '应注册 agent/turn-stopping');
   h({ agent: steerableAgent('a', steered) });
   assertTrue(steered.length === 1, '应 steer 一次');
-  assertTrue(steered[0]?.content?.[0]?.text?.includes('打转'), 'steer 文本应是打转提示');
+  assertTrue(steered[0]?.content?.[0]?.text?.includes('只读'), 'steer 文本应是打转提示（语义标记：只读）');
 });
 t('无信号时不 steer', () => {
   const ctx = mockCtx();

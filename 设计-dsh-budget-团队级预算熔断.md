@@ -90,3 +90,68 @@ export const Config = z.object({
 - 机制齐备（`subagent/start` + `tokenUsage` + `turn-stopping`），**可行性高**；
 - 主要风险在"子 agent 结束后取不到 session"这一条，需在实现时用"end 时快照"解决；
 - **建议先做一层的软熔断 MVP**，跑通再扩展。
+
+---
+
+## 六、预留式预算语义（2026-10-26 追加）
+
+> 本节吸收自 `security-audit-skill` 的 `SKILL.md:119-134`（**只抄语义，不抄代码**）。
+> 它把预算从"卡阈值"升级成"**可分配、可预留、不可静默超支**"。
+> 与第一~第五节不冲突：前五节讲**怎么聚合**，本节讲**钱怎么分**。
+
+### 6.1 可数化换算
+
+- **1 个覆盖单元 ≈ 1 次 hunter 派活**
+- **1 条存活候选 ≈ 1~2 次 verifier 派活**
+
+于是：
+
+```
+预算需求 ≈ units_to_hunt × 1 + candidates_alive × 1.5（上界 2）
+```
+
+### 6.2 预留式分配顺序（先预留、后分配）
+
+一次运行开始前，**严格按顺序**：
+
+1. **预留 P1 侦察 4 次**（固定）；
+2. **预留每个 wave 的覆盖批评家**（1 次 / wave）；
+3. **预留独立 final-clean 批评家**（1 次）；
+4. **预留验证额度**（`candidates_alive × 1.5`，上界 `× 2`）；
+5. **剩下的才给 hunters**。
+
+**hunters 只能花剩下的。** 任何"先派活、回头发现没钱验收"的顺序都是错的。
+
+### 6.3 预留不足时的降级（不发车）
+
+若"预留批评家 + 验证额度"之后**剩余为 0 或负数**：
+
+- 该 wave 的计划单元**全部标 `deferred`**；
+- 原因写死：`budget_cannot_reserve_critics_and_validation`；
+- **一个 hunter 都不许发**。
+
+宁可这轮不跑，也不许跑出一堆没人验收的候选。
+
+### 6.4 不静默超支
+
+若预算**不足以验证全部候选**：
+
+- `run_status = "incomplete"`
+- `incomplete_reason = "validation_budget_exhausted"`
+- **未验证的候选不许进 `findings.json`**；
+- **也不许改标成 `needs_validation` 来"绕过去"**——`needs_validation` 是独立认知状态，不是垃圾桶。
+
+约束原文（照抄）：
+
+> "Never exceed a user-set strict budget silently."
+
+### 6.5 与 `agent/turn-stopping` 门禁的接线
+
+现有 v1/v2 已用 `agent/turn-stopping` 做软提醒。预留语义接进来后，**收尾时的检查顺序**是：
+
+1. **硬约束检查**：若 `teamTokens > maxTeamTokens` 或 `teamSteps > maxTeamSteps` → 按配置走 warning / steer / abort（**默认仍是 soft**，见第五节）；
+2. **预留检查**：若本 wave 仍有 `deferred` 单元、原因是 `budget_cannot_reserve_critics_and_validation` → 收尾提示里**显式说明"这轮没跑是因为预留不足"**，避免让模型误判成能力问题；
+3. **不静默超支**：若 `run_status = incomplete` → 收尾提示必须带上 `incomplete_reason`（不许静默）。
+
+**与 v2 团队聚合的关系**：`maxTeamTokens` 的口径仍是"当前会话 + 活跃子 agent"（**下界**，见第五节已知边界）；**预留语义不改变这个口径**，只是补上"这块钱怎么分"。
+
