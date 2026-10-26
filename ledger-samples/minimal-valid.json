@@ -1,0 +1,78 @@
+{
+  "version": 1,
+  "generated_by": "deterministic",
+  "units": [
+    {
+      "coverage_id": "file%20read::workspace::dsh-cvm::traversal",
+      "surface": "file read",
+      "boundary": "workspace",
+      "subsystem": "dsh-cvm",
+      "attack_class": "traversal",
+      "status": "covered",
+      "agent_id": "agent-1",
+      "reviewed_paths": [
+        "src/domain/ledger-validator.mjs"
+      ],
+      "local_checks": [
+        "node src/domain/test-ledger-validator.mjs"
+      ],
+      "result_fingerprints": [],
+      "unresolved": [],
+      "prior_status": "new",
+      "attempts": []
+    },
+    {
+      "coverage_id": "network::workspace::dsh-cvm::ssrf",
+      "surface": "network",
+      "boundary": "workspace",
+      "subsystem": "dsh-cvm",
+      "attack_class": "ssrf",
+      "status": "planned",
+      "agent_id": null,
+      "reviewed_paths": [],
+      "local_checks": [],
+      "result_fingerprints": [],
+      "unresolved": [],
+      "prior_status": "new",
+      "attempts": []
+    },
+    {
+      "coverage_id": "shell::workspace::dsh-cvm::injection",
+      "surface": "shell",
+      "boundary": "workspace",
+      "subsystem": "dsh-cvm",
+      "attack_class": "injection",
+      "status": "deferred",
+      "agent_id": null,
+      "reviewed_paths": [],
+      "local_checks": [],
+      "result_fingerprints": [],
+      "unresolved": [
+        "budget_cannot_reserve_critics_and_validation"
+      ],
+      "prior_status": "new",
+      "attempts": []
+    },
+    {
+      "coverage_id": "template::workspace::dsh-cvm::ssti",
+      "surface": "template",
+      "boundary": "workspace",
+      "subsystem": "dsh-cvm",
+      "attack_class": "ssti",
+      "status": "candidate",
+      "agent_id": "agent-2",
+      "reviewed_paths": [
+        "src/domain/ledger-validator.mjs"
+      ],
+      "local_checks": [
+        "node src/domain/test-ledger-validator.mjs"
+      ],
+      "result_fingerprints": [
+        "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+      ],
+      "unresolved": [],
+      "prior_status": "new",
+      "attempts": []
+    }
+  ]
+}

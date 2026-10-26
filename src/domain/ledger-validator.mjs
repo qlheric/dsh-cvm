@@ -4,7 +4,8 @@
 // ⚠️ 跨平台铁律：不得使用 fs.constants.O_NOFOLLOW / O_NONBLOCK
 //    —— 这两个常量在 Windows 上是 undefined（Node v24 实测），
 //    用了会让本机全挂、而 Linux CI 却能过。这里只用 statSync().isFile() + 大小上限。
-import { readFileSync, statSync } from 'node:fs';
+import { readFileSync, statSync, realpathSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 export const STATUSES = Object.freeze([
   'planned',
@@ -230,3 +231,43 @@ export function readAndValidateLedger(filePath) {
   const result = validateLedger(ledger);
   return { ok: result.ok, ledger, errors: [...errors, ...result.errors] };
 }
+
+// ── CLI 入口：node src/domain/ledger-validator.mjs <账本文件> ──
+// 退出码：0=合法；1=账本非法；2=用法/环境错误
+// 说明：CLI 只做"校验"，不改账本、不联网、不写文件。
+const USAGE = `用法: node src/domain/ledger-validator.mjs <ledger.json>
+
+退出码:
+  0  账本合法
+  1  账本非法（会打印全部错误）
+  2  用法错误 / 文件不可读`;
+
+async function main(argv) {
+  const file = argv[0];
+  if (!file) {
+    console.error(USAGE);
+    process.exit(2);
+  }
+  const result = readAndValidateLedger(file);
+  if (result.ok) {
+    const n = result.ledger?.units?.length ?? 0;
+    console.log(`✓ 账本合法：${file}（${n} 个覆盖单元）`);
+    process.exit(0);
+  }
+  console.error(`✗ 账本非法：${file}`);
+  for (const err of result.errors) console.error(`  - ${err}`);
+  process.exit(1);
+}
+
+if (process.argv[1] && fileURLToPath(import.meta.url) === resolvePath(process.argv[1])) {
+  main(process.argv.slice(2)).catch((error) => {
+    console.error(`✗ 校验器异常: ${error?.message ?? error}`);
+    process.exit(2);
+  });
+}
+
+/** 跨平台路径归一（Windows 盘符大小写差异会让直接字符串比较失败）。 */
+function resolvePath(p) {
+  try { return realpathSync(p); } catch { return p; }
+}
+

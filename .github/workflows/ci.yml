@@ -19,8 +19,12 @@ jobs:
       - name: Install DSH-provided deps
         run: npm install --no-save --no-audit --no-fund @deepseek-ai/schemastery @deepseek-ai/dsh-llm
 
-      - name: Syntax check (4 plugins)
+      - name: Syntax check (5 plugins)
         run: npm run check
 
-      - name: Unit tests (core + convergence + plugins)
+      # 让"账本进 CI"真的成立：不止跑校验器自测，还要校验一份真实样例账本
+      - name: Validate sample coverage ledger
+        run: node src/domain/ledger-validator.mjs ledger-samples/minimal-valid.json
+
+      - name: Unit tests (core + convergence + plugins + budget + ledger-validator)
         run: npm test

@@ -3,7 +3,9 @@
 // 交付要求：必须含**阴性对照**——坏账必须被抓住，不许"永远绿"。
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { spawnSync } from 'node:child_process';
 import {
   validateLedger,
   isValidCoverageId,
@@ -174,6 +176,40 @@ t('目录路径 → 报错（isFile 检查）', () => {
   const r = readAndValidateLedger(tmpdir());
   assertTrue(!r.ok, '目录必须被拒');
   assertTrue(r.errors.some((e) => e.includes('不是普通文件')), r.errors.join(' | '));
+});
+
+console.log('== CLI（node ledger-validator.mjs <file>）==');
+const CLI_PATH = fileURLToPath(new URL('./ledger-validator.mjs', import.meta.url));
+const runCli = (args) => spawnSync(process.execPath, [CLI_PATH, ...args], { encoding: 'utf8' });
+
+t('CLI: 无参数 → exit 2（打印用法）', () => {
+  const r = runCli([]);
+  assertEqual(r.status, 2);
+  assertTrue((r.stderr ?? '').includes('用法'), '应打印用法');
+});
+t('CLI: 合法账本 → exit 0 + ✓', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-ledger-cli-'));
+  try {
+    const p = join(dir, 'ok.json');
+    writeFileSync(p, JSON.stringify(ledger(), null, 2), 'utf8');
+    const r = runCli([p]);
+    assertEqual(r.status, 0, `应 exit 0，实际 stderr=${r.stderr}`);
+    assertTrue((r.stdout ?? '').includes('✓'), '应打印 ✓');
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+t('CLI: 坏账本 → exit 1 + 具体错误（阴性对照）', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-ledger-cli-'));
+  try {
+    const p = join(dir, 'bad.json');
+    writeFileSync(p, JSON.stringify(ledger([unit({ reviewed_paths: [] })]), null, 2), 'utf8');
+    const r = runCli([p]);
+    assertEqual(r.status, 1, '坏账本必须 exit 1');
+    assertTrue((r.stderr ?? '').includes('reviewed_paths'), `应报具体错误，实际: ${r.stderr}`);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+t('CLI: 不存在的文件 → exit 1', () => {
+  const r = runCli([join(tmpdir(), 'dsh-ledger-nope-xyz.json')]);
+  assertEqual(r.status, 1);
 });
 
 console.log(`\n通过 ${passed} 项${failed ? `（失败 ${failed}）` : ''}`);
